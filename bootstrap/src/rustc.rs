@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use crate::{manifest::Manifest, Run};
+use crate::manifest::Manifest;
+use crate::Run;
 
 /// Invoke rustc
 #[derive(Args, Debug)]

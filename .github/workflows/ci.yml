@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # `rustup show` installs from rust-toolchain.toml
+      - name: Setup rust toolchain
+        run: rustup show
+
+      - name: Setup rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install packages
+        run: |
+          sudo apt-get install llvm-14-tools
+          echo "make:" $(which make)
+          echo "FileCheck:" $(which FileCheck)
+
+      - name: Run tests
+        run: cargo test --verbose
