@@ -1,7 +1,8 @@
 use rustc_codegen_ssa::traits::ConstMethods;
-use rustc_const_eval::interpret::ConstAllocation;
+use rustc_const_eval::interpret::{ConstAllocation, Scalar};
 
 use crate::context::CodegenCx;
+use crate::module::CValue;
 
 impl<'tcx> ConstMethods<'tcx> for CodegenCx<'tcx> {
     fn const_null(&self, t: Self::Type) -> Self::Value {
@@ -90,11 +91,14 @@ impl<'tcx> ConstMethods<'tcx> for CodegenCx<'tcx> {
 
     fn scalar_to_backend(
         &self,
-        cv: rustc_const_eval::interpret::Scalar,
+        cv: Scalar,
         layout: rustc_target::abi::Scalar,
         llty: Self::Type,
     ) -> Self::Value {
-        crate::todo()
+        match cv {
+            Scalar::Int(scalar) => CValue::Scalar(scalar.to_int(scalar.size())),
+            Scalar::Ptr(_, _) => todo!(),
+        }
     }
 
     fn const_ptr_byte_offset(

@@ -9,11 +9,12 @@ use rustc_middle::ty::layout::{
     FnAbiError, FnAbiOfHelpers, FnAbiRequest, HasParamEnv, HasTyCtxt, LayoutError, LayoutOfHelpers,
     TyAndLayout,
 };
-use rustc_middle::ty::{ParamEnv, Ty, TyCtxt};
+use rustc_middle::ty::{Instance, ParamEnv, Ty, TyCtxt};
 use rustc_target::abi::call::FnAbi;
 use rustc_target::spec::{HasTargetSpec, Target};
 
-use crate::module::{CDecl, CParamVar, CStmt, CType, Module};
+use crate::module::{CDecl, CFunction, CStmt, CType, CValue, Module};
+use crate::utils::slab::{Id, Slab};
 
 mod asm;
 mod base_type;
@@ -27,43 +28,28 @@ mod type_membership;
 
 pub struct CodegenCx<'tcx> {
     pub tcx: TyCtxt<'tcx>,
-    pub function_abis: RefCell<FxHashMap<String, (Vec<CType>, CType)>>,
-    pub functions: RefCell<FxHashMap<String, String>>,
+    pub function_instances: RefCell<FxHashMap<Instance<'tcx>, Id<CFunctionBuilder>>>,
+    pub functions: RefCell<Slab<CFunctionBuilder>>,
 }
 
 impl<'tcx> CodegenCx<'tcx> {
     pub fn new(tcx: TyCtxt<'tcx>) -> Self {
         Self {
             tcx,
-            function_abis: RefCell::new(FxHashMap::default()),
-            functions: RefCell::new(FxHashMap::default()),
+            function_instances: RefCell::new(FxHashMap::default()),
+            functions: RefCell::new(Slab::default()),
         }
     }
 
     pub fn finish(self) -> Module {
         let mut decls = vec![];
 
-        let function_abis = self.function_abis.borrow();
-        for (name, (args, ret)) in function_abis.iter() {
-            decls.push(CDecl::Function {
-                name: name.to_string(),
-                ty: ret.clone(),
-                params: args.iter().cloned().map(|ty| CParamVar { ty, name: None }).collect(),
-                body: None,
-            });
+        for function in self.functions.borrow().iter() {
+            decls.push(function.decl());
         }
 
-        for (name, instance) in self.functions.into_inner() {
-            let (args, ret) = &function_abis[&name];
-            decls.push(CDecl::Function {
-                name,
-                ty: ret.clone(),
-                params: args.iter().cloned().map(|ty| CParamVar { ty, name: None }).collect(),
-                body: Some(CStmt::Compound(vec![CStmt::Decl(Box::new(CDecl::Raw(format!(
-                    "// {}",
-                    instance
-                ))))])),
-            });
+        for function in self.functions.into_inner() {
+            decls.push(CDecl::Function(function.build()));
         }
 
         Module { includes: vec![], decls }
@@ -71,8 +57,8 @@ impl<'tcx> CodegenCx<'tcx> {
 }
 
 impl<'tcx> BackendTypes for CodegenCx<'tcx> {
-    type Value = ();
-    type Function = &'tcx str;
+    type Value = CValue;
+    type Function = Id<CFunctionBuilder>;
     type BasicBlock = ();
     type Type = ();
     type Funclet = ();
@@ -123,5 +109,48 @@ impl<'tcx> FnAbiOfHelpers<'tcx> for CodegenCx<'tcx> {
         fn_abi_request: FnAbiRequest<'tcx>,
     ) -> ! {
         todo!()
+    }
+}
+
+pub struct CFunctionBuilder {
+    pub name: String,
+    pub ty: CType,
+    pub params: Vec<(CType, CValue)>,
+    pub body: Vec<CStmt>,
+    pub var_names: FxHashMap<CValue, String>,
+    var_counter: usize,
+}
+
+impl CFunctionBuilder {
+    pub fn new(name: String, ty: CType, params: Vec<CType>) -> Self {
+        let params: Vec<_> =
+            params.into_iter().enumerate().map(|(i, ty)| (ty, CValue::Var(i))).collect();
+        let var_counter = params.len();
+
+        Self { name, ty, params, body: Vec::new(), var_counter, var_names: FxHashMap::default() }
+    }
+
+    pub fn build(self) -> CFunction {
+        CFunction {
+            name: self.name,
+            ty: self.ty,
+            params: self.params,
+            body: self.body,
+            var_names: self.var_names,
+        }
+    }
+
+    pub fn decl(&self) -> CDecl {
+        CDecl::FunctionDecl {
+            name: self.name.clone(),
+            ty: self.ty.clone(),
+            params: self.params.iter().map(|(ty, _)| ty.clone()).collect(),
+        }
+    }
+
+    pub fn next_value(&mut self) -> CValue {
+        let val = CValue::Var(self.var_counter);
+        self.var_counter += 1;
+        val
     }
 }
