@@ -29,6 +29,7 @@ mod type_membership;
 pub struct CodegenCx<'tcx> {
     pub tcx: TyCtxt<'tcx>,
     pub function_instances: RefCell<FxHashMap<Instance<'tcx>, Id<CFunctionBuilder>>>,
+    // TODO: better inner mutablity for slab
     pub functions: RefCell<Slab<CFunctionBuilder>>,
 }
 
@@ -59,7 +60,7 @@ impl<'tcx> CodegenCx<'tcx> {
 impl<'tcx> BackendTypes for CodegenCx<'tcx> {
     type Value = CValue;
     type Function = Id<CFunctionBuilder>;
-    type BasicBlock = ();
+    type BasicBlock = Id<CFunctionBuilder>;
     type Type = ();
     type Funclet = ();
     type DIScope = ();
@@ -152,5 +153,9 @@ impl CFunctionBuilder {
         let val = CValue::Var(self.var_counter);
         self.var_counter += 1;
         val
+    }
+
+    pub fn push_stmt(&mut self, stmt: CStmt) {
+        self.body.push(stmt);
     }
 }

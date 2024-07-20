@@ -13,4 +13,6 @@ pub fn function_name() -> i32 {
 }
 
 #[no_mangle]
-pub fn main() {}
+pub fn main() -> i32 {
+    0
+}
