@@ -5,7 +5,7 @@ use rustc_middle::ty::layout::FnAbiOf;
 use rustc_middle::ty::{self, Instance, Ty};
 use rustc_target::abi::call::{ArgAbi, PassMode};
 
-use crate::context::CodegenCx;
+use crate::context::{CFunctionBuilder, CodegenCx};
 use crate::module::CType;
 
 impl<'tcx> PreDefineMethods<'tcx> for CodegenCx<'tcx> {
@@ -30,9 +30,10 @@ impl<'tcx> PreDefineMethods<'tcx> for CodegenCx<'tcx> {
 
         let args = fn_abi.args.iter().map(|arg| type_from_abi(arg)).collect();
         let ret = type_from_abi(&fn_abi.ret);
-        self.function_abis.borrow_mut().insert(symbol_name.to_string(), (args, ret));
 
-        self.functions.borrow_mut().insert(symbol_name.to_string(), format!("{:?}", instance));
+        let function = CFunctionBuilder::new(symbol_name.to_string(), ret, args);
+        let function_id = self.functions.borrow_mut().insert(function);
+        self.function_instances.borrow_mut().insert(instance, function_id);
     }
 }
 

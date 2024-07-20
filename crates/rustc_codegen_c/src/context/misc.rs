@@ -15,7 +15,7 @@ impl<'tcx> MiscMethods<'tcx> for CodegenCx<'tcx> {
     }
 
     fn get_fn(&self, instance: Instance<'tcx>) -> Self::Function {
-        self.tcx.symbol_name(instance).name
+        *self.function_instances.borrow().get(&instance).unwrap()
     }
 
     fn get_fn_addr(&self, instance: Instance<'tcx>) -> Self::Value {
