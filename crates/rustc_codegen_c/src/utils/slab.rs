@@ -4,8 +4,6 @@ pub struct Slab<T> {
     data: Vec<T>,
 }
 
-
-
 impl<T> Default for Slab<T> {
     fn default() -> Self {
         Self::new()
@@ -55,11 +53,17 @@ impl<T> IndexMut<Id<T>> for Slab<T> {
 }
 
 pub struct Id<T> {
-    index: usize,
+    pub(super) index: usize,
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T> Copy for Id<T>{}
+impl<T> Id<T> {
+    pub(super) fn new(index: usize) -> Self {
+        Self { index, _phantom: std::marker::PhantomData }
+    }
+}
+
+impl<T> Copy for Id<T> {}
 
 impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {

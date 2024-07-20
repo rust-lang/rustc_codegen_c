@@ -7,7 +7,7 @@ use rustc_middle::ty::TyCtxt;
 
 use crate::builder::Builder;
 use crate::context::CodegenCx;
-use crate::module::Module;
+use crate::module::ModuleContext;
 
 // note: parallel
 // it seems this function will be invoked parallelly (if parallel codegen is enabled)
@@ -15,7 +15,7 @@ use crate::module::Module;
 pub fn compile_codegen_unit(
     tcx: TyCtxt<'_>,
     cgu_name: rustc_span::Symbol,
-) -> (ModuleCodegen<Module>, u64) {
+) -> (ModuleCodegen<ModuleContext>, u64) {
     let start_time = Instant::now();
 
     let dep_node = tcx.codegen_unit(cgu_name).codegen_dep_node(tcx);
@@ -36,7 +36,7 @@ pub fn compile_codegen_unit(
     (module, cost)
 }
 
-fn module_codegen(tcx: TyCtxt<'_>, cgu_name: rustc_span::Symbol) -> ModuleCodegen<Module> {
+fn module_codegen(tcx: TyCtxt<'_>, cgu_name: rustc_span::Symbol) -> ModuleCodegen<ModuleContext> {
     let cgu = tcx.codegen_unit(cgu_name);
 
     let cx = CodegenCx::new(tcx);

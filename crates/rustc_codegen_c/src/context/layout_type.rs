@@ -3,6 +3,7 @@ use rustc_codegen_ssa::traits::LayoutTypeMethods;
 use rustc_middle::ty::layout::TyAndLayout;
 use rustc_middle::ty::Ty;
 use rustc_target::abi::call::FnAbi;
+use rustc_type_ir::TyKind;
 
 use crate::context::CodegenCx;
 
@@ -28,7 +29,11 @@ impl<'tcx> LayoutTypeMethods<'tcx> for CodegenCx<'tcx> {
     }
 
     fn immediate_backend_type(&self, layout: TyAndLayout<'tcx>) -> Self::Type {
-        crate::todo()
+        match layout.ty.kind() {
+            TyKind::Int(int) => self.mcx.get_int_type(*int),
+            TyKind::Uint(uint) => self.mcx.get_uint_type(*uint),
+            _ => todo!(),
+        }
     }
 
     fn is_backend_immediate(&self, layout: TyAndLayout<'tcx>) -> bool {
