@@ -61,9 +61,7 @@ impl ModuleContext {
             IntTy::I128 => todo!(),
         };
         let ty = self.types.insert(tykind);
-        self.primitive_types
-            .write()
-            .insert(PimitiveType::Int(int), ty);
+        self.primitive_types.write().insert(PimitiveType::Int(int), ty);
         ty
     }
 
@@ -82,9 +80,7 @@ impl ModuleContext {
             UintTy::U128 => todo!(),
         };
         let ty = self.types.insert(tykind);
-        self.primitive_types
-            .write()
-            .insert(PimitiveType::Uint(uint), ty);
+        self.primitive_types.write().insert(PimitiveType::Uint(uint), ty);
         ty
     }
 }
