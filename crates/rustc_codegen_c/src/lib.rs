@@ -43,12 +43,13 @@ use rustc_span::ErrorGuaranteed;
 
 use crate::module::Module;
 
+
 mod archive;
 mod base;
 mod builder;
 mod context;
 mod module;
-mod util;
+mod utils;
 mod write;
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
@@ -62,7 +63,7 @@ impl CodegenBackend for CCodegen {
     }
 
     fn provide(&self, providers: &mut Providers) {
-        providers.global_backend_features = |tcx, ()| util::global_backend_features(tcx)
+        providers.global_backend_features = |_tcx, ()| vec![]
     }
 
     fn codegen_crate(

@@ -4,10 +4,11 @@ use rustc_middle::ty::Ty;
 use rustc_target::abi::call::ArgAbi;
 
 use crate::builder::Builder;
+use crate::module::CValue;
 
 impl<'tcx> AbiBuilderMethods<'tcx> for Builder<'_, 'tcx> {
     fn get_param(&mut self, index: usize) -> Self::Value {
-        crate::todo()
+        CValue::Var(index)
     }
 }
 
