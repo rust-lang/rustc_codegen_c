@@ -27,8 +27,6 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get install llvm-14-tools
-          echo "make:" $(which make)
-          echo "FileCheck:" $(which FileCheck)
 
       - name: Run tests
-        run: cargo test --verbose
+        run: ./y.sh test
