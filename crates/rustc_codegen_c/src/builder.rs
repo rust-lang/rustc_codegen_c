@@ -12,7 +12,9 @@ use rustc_middle::ty::{ParamEnv, Ty, TyCtxt};
 use rustc_target::abi::call::FnAbi;
 use rustc_target::spec::{HasTargetSpec, Target};
 
-use crate::context::CodegenCx;
+use crate::context::{CFunctionBuilder, CodegenCx};
+use crate::module::{CExpr, CStmt};
+use crate::utils::slab::Id;
 
 mod abi;
 mod asm;
@@ -23,6 +25,7 @@ mod r#static;
 
 pub struct Builder<'a, 'tcx> {
     pub cx: &'a CodegenCx<'tcx>,
+    bb: Id<CFunctionBuilder>,
 }
 
 impl<'a, 'tcx> Deref for Builder<'a, 'tcx> {
@@ -96,7 +99,7 @@ impl<'tcx> FnAbiOfHelpers<'tcx> for Builder<'_, 'tcx> {
 
 impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
     fn build(cx: &'a Self::CodegenCx, llbb: Self::BasicBlock) -> Self {
-        Self { cx }
+        Self { cx, bb: llbb }
     }
 
     fn cx(&self) -> &Self::CodegenCx {
@@ -110,7 +113,9 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
     fn set_span(&mut self, _span: rustc_span::Span) {}
 
     fn append_block(cx: &'a Self::CodegenCx, llfn: Self::Function, name: &str) -> Self::BasicBlock {
-        crate::todo()
+        // assume there is only one basic block
+        // more complicated cases will be handled in the future
+        llfn
     }
 
     fn append_sibling_block(&mut self, name: &str) -> Self::BasicBlock {
@@ -122,11 +127,13 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
     }
 
     fn ret_void(&mut self) {
-        crate::todo()
+        let mut fuctions = self.cx.functions.borrow_mut();
+        fuctions[self.bb].push_stmt(CStmt::Return(None));
     }
 
     fn ret(&mut self, v: Self::Value) {
-        crate::todo()
+        let mut fuctions = self.cx.functions.borrow_mut();
+        fuctions[self.bb].push_stmt(CStmt::Return(Some(Box::new(CExpr::Value(v)))));
     }
 
     fn br(&mut self, dest: Self::BasicBlock) {

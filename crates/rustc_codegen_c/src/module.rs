@@ -119,6 +119,7 @@ impl Display for CEnumConstant {
     }
 }
 
+/// Values of C variable, parameters and scalars
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum CValue {
     Scalar(i128),

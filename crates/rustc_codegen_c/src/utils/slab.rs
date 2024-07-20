@@ -1,3 +1,5 @@
+use std::ops::{Index, IndexMut};
+
 pub struct Slab<T> {
     data: Vec<T>,
 }
@@ -36,6 +38,19 @@ impl<T> IntoIterator for Slab<T> {
 
     fn into_iter(self) -> std::vec::IntoIter<T> {
         self.data.into_iter()
+    }
+}
+
+impl<T> Index<Id<T>> for Slab<T> {
+    type Output = T;
+    fn index(&self, id: Id<T>) -> &T {
+        &self.data[id.index]
+    }
+}
+
+impl<T> IndexMut<Id<T>> for Slab<T> {
+    fn index_mut(&mut self, id: Id<T>) -> &mut T {
+        &mut self.data[id.index]
     }
 }
 

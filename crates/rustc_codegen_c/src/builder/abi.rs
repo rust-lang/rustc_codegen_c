@@ -8,6 +8,7 @@ use crate::module::CValue;
 
 impl<'tcx> AbiBuilderMethods<'tcx> for Builder<'_, 'tcx> {
     fn get_param(&mut self, index: usize) -> Self::Value {
+        // Params are first n variables in the function
         CValue::Var(index)
     }
 }
