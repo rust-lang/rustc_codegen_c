@@ -13,7 +13,7 @@ use rustc_middle::ty::{Instance, ParamEnv, Ty, TyCtxt};
 use rustc_target::abi::call::FnAbi;
 use rustc_target::spec::{HasTargetSpec, Target};
 
-use crate::module::{CDecl, CFunction, CStmt, CType, CValue, Module};
+use crate::module::{CDecl, CFunction, CStmt, CType, CValue, ModuleContext};
 use crate::utils::slab::{Id, Slab};
 
 mod asm;
@@ -28,6 +28,7 @@ mod type_membership;
 
 pub struct CodegenCx<'tcx> {
     pub tcx: TyCtxt<'tcx>,
+    pub mcx: ModuleContext,
     pub function_instances: RefCell<FxHashMap<Instance<'tcx>, Id<CFunctionBuilder>>>,
     // TODO: better inner mutablity for slab
     pub functions: RefCell<Slab<CFunctionBuilder>>,
@@ -35,25 +36,23 @@ pub struct CodegenCx<'tcx> {
 
 impl<'tcx> CodegenCx<'tcx> {
     pub fn new(tcx: TyCtxt<'tcx>) -> Self {
+        let mcx = ModuleContext::new();
         Self {
             tcx,
+            mcx,
             function_instances: RefCell::new(FxHashMap::default()),
             functions: RefCell::new(Slab::default()),
         }
     }
 
-    pub fn finish(self) -> Module {
-        let mut decls = vec![];
-
+    pub fn finish(mut self) -> ModuleContext {
         for function in self.functions.borrow().iter() {
-            decls.push(function.decl());
+            self.mcx.module.decls.push(function.decl());
         }
-
         for function in self.functions.into_inner() {
-            decls.push(CDecl::Function(function.build()));
+            self.mcx.module.decls.push(CDecl::Function(function.build()));
         }
-
-        Module { includes: vec![], decls }
+        self.mcx
     }
 }
 
@@ -61,7 +60,7 @@ impl<'tcx> BackendTypes for CodegenCx<'tcx> {
     type Value = CValue;
     type Function = Id<CFunctionBuilder>;
     type BasicBlock = Id<CFunctionBuilder>;
-    type Type = ();
+    type Type = CType;
     type Funclet = ();
     type DIScope = ();
     type DILocation = ();
@@ -144,8 +143,8 @@ impl CFunctionBuilder {
     pub fn decl(&self) -> CDecl {
         CDecl::FunctionDecl {
             name: self.name.clone(),
-            ty: self.ty.clone(),
-            params: self.params.iter().map(|(ty, _)| ty.clone()).collect(),
+            ty: self.ty,
+            params: self.params.iter().map(|(ty, _)| *ty).collect(),
         }
     }
 
