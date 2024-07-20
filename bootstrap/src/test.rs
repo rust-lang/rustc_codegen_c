@@ -79,6 +79,7 @@ impl TestCommand {
 }
 
 pub enum TestType {
+    /// Test an executable can be compiled
     Compile,
     FileCheck,
 }
