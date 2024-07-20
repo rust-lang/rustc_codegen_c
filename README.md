@@ -10,12 +10,17 @@ The project is at very early stage. Most of the code is not implemented yet.
 
 ## Try it
 
+In the root directory of the project, run the following command:
+
 ```bash
-./y.sh rustc example/example.rs
+./y rustc example/example.rs
 ./build/example
 ```
 
-The usage of `y.sh` can be viewed from `./y.sh help`.
+The usage of `./y` can be viewed from `./y help`.
+
+Note: only Linux is supported at the moment. `clang` is required to compile C code, 
+and LLVM FileCheck is required to test the codegen.
 
 ## License
 
