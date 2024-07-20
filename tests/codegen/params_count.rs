@@ -12,4 +12,6 @@ pub fn foo(_x: i32, _y: i32, _z: i32) -> i32 {
 }
 
 #[no_mangle]
-pub fn main() {}
+pub fn main() -> i32 {
+    0
+}
