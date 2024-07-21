@@ -12,8 +12,9 @@ use rustc_middle::ty::{ParamEnv, Ty, TyCtxt};
 use rustc_target::abi::call::FnAbi;
 use rustc_target::spec::{HasTargetSpec, Target};
 
+use crate::c_expr;
 use crate::context::{CFunctionBuilder, CodegenCx};
-use crate::module::{CExpr, CStmt};
+use crate::module::{CDecl, CExpr, CStmt, CType};
 use crate::utils::slab::Id;
 
 mod abi;
@@ -127,13 +128,13 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
     }
 
     fn ret_void(&mut self) {
-        let mut fuctions = self.cx.functions.borrow_mut();
-        fuctions[self.bb].push_stmt(CStmt::Return(None));
+        let mut functions = self.cx.functions.borrow_mut();
+        functions[self.bb].push_stmt(CStmt::Return(None));
     }
 
     fn ret(&mut self, v: Self::Value) {
-        let mut fuctions = self.cx.functions.borrow_mut();
-        fuctions[self.bb].push_stmt(CStmt::Return(Some(Box::new(CExpr::Value(v)))));
+        let mut functions = self.cx.functions.borrow_mut();
+        functions[self.bb].push_stmt(CStmt::Return(Some(Box::new(CExpr::Value(v)))));
     }
 
     fn br(&mut self, dest: Self::BasicBlock) {
@@ -495,8 +496,48 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
         todo!()
     }
 
+    /// Performs cast between integers, x as ty in Rust.
+    ///
+    /// If the bit width is different, a truncation or extension is required.
+    /// The type of extension—sign-extension or zero-extension—depends on the
+    /// signedness of the source type.
+    ///
+    /// According to the C17 standard, section "6.3.1.3 Signed and unsigned
+    /// integers", casting to an unsigned integer behaves the same as in Rust.
+    /// However, casting to a signed integer is implementation-defined.
+    ///
+    /// Therefore, a two-step cast is necessary. First, cast to an unsigned
+    /// integer via explicit conversion. Then, use a helper function to cast the
+    /// result to a signed integer.
     fn intcast(&mut self, val: Self::Value, dest_ty: Self::Type, is_signed: bool) -> Self::Value {
-        todo!()
+        let mut functions = self.cx.functions.borrow_mut();
+        let function = &mut functions[self.bb];
+        let ret = function.next_value();
+
+        let dest = if let CType::Primitive(ty) = dest_ty { ty } else { unreachable!() };
+        let cast = if !dest.is_signed() {
+            CExpr::Cast { ty: CType::Primitive(dest), expr: Box::new(CExpr::Value(val)) }
+        } else {
+            let cast = CExpr::Cast {
+                ty: CType::Primitive(dest.to_unsigned()),
+                expr: Box::new(CExpr::Value(val)),
+            };
+            CExpr::Call {
+                callee: c_expr!("__rust_utos"),
+                args: vec![
+                    c_expr!(dest.to_unsigned().to_string()),
+                    c_expr!(dest.to_string()),
+                    cast,
+                    c_expr!(dest.max_value()),
+                ],
+            }
+        };
+        function.push_stmt(CStmt::Decl(Box::new(CDecl::Var {
+            name: ret,
+            ty: dest_ty,
+            init: Some(cast),
+        })));
+        ret
     }
 
     fn pointercast(&mut self, val: Self::Value, dest_ty: Self::Type) -> Self::Value {

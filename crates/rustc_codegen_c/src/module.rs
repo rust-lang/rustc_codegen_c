@@ -4,25 +4,17 @@
 //!
 //! The structure is derived from clang's AST.
 
-use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
-use parking_lot::RwLock;
-use rustc_hash::FxHashMap;
 use rustc_type_ir::{IntTy, UintTy};
 
 use crate::utils::sharded_slab::{Entry, Id, ShardedSlab};
 
-/// Rust's primitive types
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PimitiveType {
-    Int(IntTy),
-    Uint(UintTy),
-}
+/// Needed helper functions
+const HELPER: &str = include_str!("./helper.h");
 
 pub struct ModuleContext {
     types: ShardedSlab<CTypeKind>,
-    primitive_types: RwLock<FxHashMap<PimitiveType, CType>>,
     pub module: Module,
 }
 
@@ -34,54 +26,36 @@ impl Default for ModuleContext {
 
 impl ModuleContext {
     pub fn new() -> Self {
-        Self {
-            types: ShardedSlab::default(),
-            primitive_types: RwLock::new(FxHashMap::default()),
-            module: Module::new(),
-        }
+        Self { types: ShardedSlab::default(), module: Module::new() }
     }
 
     /// Get the type
-    pub fn ty(&self, id: CType) -> Entry<CTypeKind> {
+    pub fn get_type(&self, id: Id<CTypeKind>) -> Entry<CTypeKind> {
         self.types.get(id).unwrap()
     }
 
     /// Get the type of an signed integer
     pub fn get_int_type(&self, int: IntTy) -> CType {
-        if let Some(ty) = self.primitive_types.read().get(&PimitiveType::Int(int)) {
-            return *ty;
+        match int {
+            IntTy::Isize => CType::Primitive(CPrimitiveType::Isize),
+            IntTy::I8 => CType::Primitive(CPrimitiveType::I8),
+            IntTy::I16 => CType::Primitive(CPrimitiveType::I16),
+            IntTy::I32 => CType::Primitive(CPrimitiveType::I32),
+            IntTy::I64 => CType::Primitive(CPrimitiveType::I64),
+            IntTy::I128 => unimplemented!("i128 not supported yet"),
         }
-
-        let tykind = match int {
-            IntTy::Isize => CTypeKind::Builtin("ssize_t".to_string()),
-            IntTy::I8 => CTypeKind::Builtin("int8_t".to_string()),
-            IntTy::I16 => CTypeKind::Builtin("int16_t".to_string()),
-            IntTy::I32 => CTypeKind::Builtin("int32_t".to_string()),
-            IntTy::I64 => CTypeKind::Builtin("int64_t".to_string()),
-            IntTy::I128 => todo!(),
-        };
-        let ty = self.types.insert(tykind);
-        self.primitive_types.write().insert(PimitiveType::Int(int), ty);
-        ty
     }
 
     /// Get the type of an unsigned integer
     pub fn get_uint_type(&self, uint: UintTy) -> CType {
-        if let Some(ty) = self.primitive_types.read().get(&PimitiveType::Uint(uint)) {
-            return *ty;
+        match uint {
+            UintTy::Usize => CType::Primitive(CPrimitiveType::Usize),
+            UintTy::U8 => CType::Primitive(CPrimitiveType::U8),
+            UintTy::U16 => CType::Primitive(CPrimitiveType::U16),
+            UintTy::U32 => CType::Primitive(CPrimitiveType::U32),
+            UintTy::U64 => CType::Primitive(CPrimitiveType::U64),
+            UintTy::U128 => unimplemented!("u128 not supported yet"),
         }
-
-        let tykind = match uint {
-            UintTy::Usize => CTypeKind::Builtin("size_t".to_string()),
-            UintTy::U8 => CTypeKind::Builtin("uint8_t".to_string()),
-            UintTy::U16 => CTypeKind::Builtin("uint16_t".to_string()),
-            UintTy::U32 => CTypeKind::Builtin("uint32_t".to_string()),
-            UintTy::U64 => CTypeKind::Builtin("uint64_t".to_string()),
-            UintTy::U128 => todo!(),
-        };
-        let ty = self.types.insert(tykind);
-        self.primitive_types.write().insert(PimitiveType::Uint(uint), ty);
-        ty
     }
 }
 
@@ -123,6 +97,7 @@ impl Module {
         for include in &self.includes {
             writeln!(f, "#include <{}>", include)?;
         }
+        writeln!(f, "{}", HELPER)?;
         for decl in &self.decls {
             writeln!(f, "{}", decl.display(ctx))?;
         }
@@ -137,7 +112,7 @@ pub enum CDecl {
     Enum { name: String, values: Vec<CEnumConstant> },
     FunctionDecl { name: String, ty: CType, params: Vec<CType> },
     Function(CFunction),
-    // Var { name: String, ty: CType, init: Option<CStmt> },
+    Var { name: CValue, ty: CType, init: Option<CExpr> },
     Raw(String),
 }
 
@@ -155,7 +130,7 @@ impl CDecl {
     fn fmt_with(&self, f: &mut Formatter<'_>, ctx: &ModuleContext) -> std::fmt::Result {
         match self {
             CDecl::Typedef { name, ty } => {
-                write!(f, "typedef {} {};", name, ctx.ty(*ty).display(ctx))
+                write!(f, "typedef {} {};", name, ty.display(ctx))
             }
             CDecl::Record { name, fields } => {
                 writeln!(f, "struct {} {{ ", name)?;
@@ -164,7 +139,7 @@ impl CDecl {
                 }
                 writeln!(f, "}};")
             }
-            CDecl::Field { name, ty } => write!(f, "{} {}", name, ctx.ty(*ty).display(ctx)),
+            CDecl::Field { name, ty } => write!(f, "{} {}", name, ty.display(ctx)),
             CDecl::Enum { name, values } => {
                 writeln!(f, "enum {} {{ ", name)?;
                 for (i, value) in values.iter().enumerate() {
@@ -176,33 +151,137 @@ impl CDecl {
                 writeln!(f, "}};")
             }
             CDecl::FunctionDecl { name, ty, params } => {
-                write!(f, "{} {}(", ctx.ty(*ty).display(ctx), name)?;
+                write!(f, "{} {}(", ty.display(ctx), name)?;
                 for (i, param) in params.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", ctx.ty(*param).display(ctx))?;
+                    write!(f, "{}", param.display(ctx))?;
                 }
                 write!(f, ");")
             }
             CDecl::Function(func) => write!(f, "{}", func.display(ctx)),
-            // CDecl::Var { name, ty, init } => {
-            //     write!(f, "{} {}", ty, name)?;
-            //     if let Some(init) = init {
-            //         write!(f, " = {}", init)?;
-            //     }
-            //     write!(f, ";")
-            // }
+            CDecl::Var { name, ty, init } => {
+                write!(f, "{} {}", ty.display(ctx), name)?;
+                if let Some(init) = init {
+                    write!(f, " = {}", init.display(ctx))?;
+                }
+                write!(f, ";")
+            }
             CDecl::Raw(s) => write!(f, "{}", s),
         }
     }
 }
 
-pub type CType = Id<CTypeKind>;
+/// A C type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CType {
+    Primitive(CPrimitiveType),
+    Ref(Id<CTypeKind>),
+}
+
+impl CType {
+    pub fn display<'a>(&'a self, ctx: &'a ModuleContext) -> impl Display + 'a {
+        struct CTypeDisplay<'a>(&'a CType, &'a ModuleContext);
+        impl<'a> Display for CTypeDisplay<'a> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt_with(f, self.1)
+            }
+        }
+        CTypeDisplay(self, ctx)
+    }
+
+    fn fmt_with(&self, f: &mut Formatter<'_>, ctx: &ModuleContext) -> std::fmt::Result {
+        match self {
+            CType::Primitive(ty) => write!(f, "{}", ty),
+            CType::Ref(id) => write!(f, "{}", ctx.get_type(*id).display(ctx)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CPrimitiveType {
+    Isize,
+    I8,
+    I16,
+    I32,
+    I64,
+    Usize,
+    U8,
+    U16,
+    U32,
+    U64,
+}
+
+impl CPrimitiveType {
+    /// Whether the type is a signed integer.
+    pub fn is_signed(self) -> bool {
+        match self {
+            CPrimitiveType::Isize
+            | CPrimitiveType::I8
+            | CPrimitiveType::I16
+            | CPrimitiveType::I32
+            | CPrimitiveType::I64 => true,
+            CPrimitiveType::Usize
+            | CPrimitiveType::U8
+            | CPrimitiveType::U16
+            | CPrimitiveType::U32
+            | CPrimitiveType::U64 => false,
+        }
+    }
+
+    /// The unsigned version of this type.
+    ///
+    /// ## Panic
+    ///
+    /// Panics if the type is not a signed integer.
+    pub fn to_unsigned(self) -> CPrimitiveType {
+        match self {
+            CPrimitiveType::Isize => CPrimitiveType::Usize,
+            CPrimitiveType::I8 => CPrimitiveType::U8,
+            CPrimitiveType::I16 => CPrimitiveType::U16,
+            CPrimitiveType::I32 => CPrimitiveType::U32,
+            CPrimitiveType::I64 => CPrimitiveType::U64,
+            _ => unreachable!(),
+        }
+    }
+
+    /// The maximum value of this type. From `<stdint.h>`.
+    pub fn max_value(self) -> &'static str {
+        match self {
+            CPrimitiveType::Isize => "SIZE_MAX",
+            CPrimitiveType::I8 => "INT8_MAX",
+            CPrimitiveType::I16 => "INT16_MAX",
+            CPrimitiveType::I32 => "INT32_MAX",
+            CPrimitiveType::I64 => "INT64_MAX",
+            CPrimitiveType::Usize => "SIZE_MAX",
+            CPrimitiveType::U8 => "UINT8_MAX",
+            CPrimitiveType::U16 => "UINT16_MAX",
+            CPrimitiveType::U32 => "UINT32_MAX",
+            CPrimitiveType::U64 => "UINT64_MAX",
+        }
+    }
+}
+
+impl Display for CPrimitiveType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CPrimitiveType::Isize => write!(f, "ssize_t"),
+            CPrimitiveType::I8 => write!(f, "int8_t"),
+            CPrimitiveType::I16 => write!(f, "int16_t"),
+            CPrimitiveType::I32 => write!(f, "int32_t"),
+            CPrimitiveType::I64 => write!(f, "int64_t"),
+            CPrimitiveType::Usize => write!(f, "size_t"),
+            CPrimitiveType::U8 => write!(f, "uint8_t"),
+            CPrimitiveType::U16 => write!(f, "uint16_t"),
+            CPrimitiveType::U32 => write!(f, "uint32_t"),
+            CPrimitiveType::U64 => write!(f, "uint64_t"),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CTypeKind {
-    Builtin(String),
     Pointer(CType),
     Record(String),
     Array(CType, usize),
@@ -221,10 +300,9 @@ impl CTypeKind {
 
     fn fmt_with(&self, f: &mut Formatter<'_>, ctx: &ModuleContext) -> std::fmt::Result {
         match self {
-            CTypeKind::Builtin(ty) => write!(f, "{}", ty),
-            CTypeKind::Pointer(ty) => write!(f, "{}*", ctx.ty(*ty).display(ctx)),
+            CTypeKind::Pointer(ty) => write!(f, "{}*", ty.display(ctx)),
             CTypeKind::Record(ty) => write!(f, "struct {}", ty),
-            CTypeKind::Array(ty, size) => write!(f, "{}[{}]", ctx.ty(*ty).display(ctx), size),
+            CTypeKind::Array(ty, size) => write!(f, "{}[{}]", ty.display(ctx), size),
         }
     }
 }
@@ -248,7 +326,16 @@ impl Display for CEnumConstant {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum CValue {
     Scalar(i128),
-    Var(usize),
+    Local(usize),
+}
+
+impl Display for CValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CValue::Scalar(scalar) => write!(f, "{}", scalar),
+            CValue::Local(index) => write!(f, "_{}", index),
+        }
+    }
 }
 
 pub struct CFunction {
@@ -256,20 +343,6 @@ pub struct CFunction {
     pub ty: CType,
     pub params: Vec<(CType, CValue)>,
     pub body: Vec<CStmt>,
-    pub var_names: FxHashMap<CValue, String>,
-}
-
-impl CFunction {
-    pub fn get_var_name(&self, var: CValue) -> Cow<str> {
-        if let Some(name) = self.var_names.get(&var) {
-            Cow::Borrowed(name)
-        } else {
-            Cow::Owned(match var {
-                CValue::Scalar(scalar) => format!("{}", scalar),
-                CValue::Var(index) => format!("_{}", index),
-            })
-        }
-    }
 }
 
 impl CFunction {
@@ -284,16 +357,16 @@ impl CFunction {
     }
 
     fn fmt_with(&self, f: &mut Formatter<'_>, ctx: &ModuleContext) -> std::fmt::Result {
-        write!(f, "{} {}(", ctx.ty(self.ty).display(ctx), self.name)?;
+        write!(f, "{} {}(", self.ty.display(ctx), self.name)?;
         for (i, (ty, param)) in self.params.iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{} {}", ctx.ty(*ty).display(ctx), self.get_var_name(*param))?;
+            write!(f, "{} {}", ty.display(ctx), param)?;
         }
-        write!(f, ") {{")?;
+        writeln!(f, ") {{")?;
         for stmt in &self.body {
-            writeln!(f, "{}", stmt.display(self, ctx))?;
+            writeln!(f, "{}", stmt.display(ctx))?;
         }
         write!(f, "}}")
     }
@@ -308,93 +381,89 @@ pub enum CStmt {
 }
 
 impl CStmt {
-    pub fn display<'a>(&'a self, fun: &'a CFunction, ctx: &'a ModuleContext) -> impl Display + '_ {
-        struct CStmtDisplay<'a>(&'a CStmt, &'a CFunction, &'a ModuleContext);
+    pub fn display<'a>(&'a self, ctx: &'a ModuleContext) -> impl Display + '_ {
+        struct CStmtDisplay<'a>(&'a CStmt, &'a ModuleContext);
         impl<'a> Display for CStmtDisplay<'a> {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                self.0.fmt_with(f, self.1, self.2)
+                self.0.fmt_with(f, self.1)
             }
         }
-        CStmtDisplay(self, fun, ctx)
+        CStmtDisplay(self, ctx)
     }
 
-    fn fmt_with(
-        &self,
-        f: &mut Formatter<'_>,
-        fun: &CFunction,
-        ctx: &ModuleContext,
-    ) -> std::fmt::Result {
+    fn fmt_with(&self, f: &mut Formatter<'_>, ctx: &ModuleContext) -> std::fmt::Result {
         match self {
             CStmt::Compound(stmts) => {
                 writeln!(f, "{{")?;
                 for stmt in stmts {
-                    writeln!(f, "{}", stmt.display(fun, ctx))?;
+                    writeln!(f, "{}", stmt.display(ctx))?;
                 }
                 write!(f, "}}")
             }
             CStmt::If { cond, then_br: then_, else_br: else_ } => {
-                writeln!(f, "if ({}) {{", cond.display(fun))?;
-                writeln!(f, "{}", then_.display(fun, ctx))?;
+                writeln!(f, "if ({}) {{", cond.display(ctx))?;
+                writeln!(f, "{}", then_.display(ctx))?;
                 if let Some(else_) = else_ {
                     writeln!(f, "}} else {{")?;
-                    writeln!(f, "{}", else_.display(fun, ctx))?;
+                    writeln!(f, "{}", else_.display(ctx))?;
                 }
                 write!(f, "}}")
             }
             CStmt::Return(expr) => {
                 write!(f, "return")?;
                 if let Some(expr) = expr {
-                    write!(f, " {}", expr.display(fun))?;
+                    write!(f, " {}", expr.display(ctx))?;
                 }
                 write!(f, ";")
             }
             CStmt::Decl(decl) => write!(f, "{}", decl.display(ctx)),
-            CStmt::Expr(expr) => write!(f, "{};", expr.display(fun)),
+            CStmt::Expr(expr) => write!(f, "{};", expr.display(ctx)),
         }
     }
 }
 
 pub enum CExpr {
-    Literal(String),
+    Raw(String),
     Value(CValue),
     BinaryOperator { lhs: Box<CExpr>, rhs: Box<CExpr>, op: String },
+    Cast { ty: CType, expr: Box<CExpr> },
     Call { callee: Box<CExpr>, args: Vec<CExpr> },
     Member { expr: Box<CExpr>, arrow: bool, field: String },
 }
 
 impl CExpr {
-    pub fn display<'a>(&'a self, fun: &'a CFunction) -> impl Display + '_ {
-        struct CExprDisplay<'a>(&'a CExpr, &'a CFunction);
+    pub fn display<'a>(&'a self, ctx: &'a ModuleContext) -> impl Display + '_ {
+        struct CExprDisplay<'a>(&'a CExpr, &'a ModuleContext);
         impl<'a> Display for CExprDisplay<'a> {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
                 self.0.fmt_with(f, self.1)
             }
         }
-        CExprDisplay(self, fun)
+        CExprDisplay(self, ctx)
     }
 
-    fn fmt_with(&self, f: &mut Formatter<'_>, fun: &CFunction) -> std::fmt::Result {
+    fn fmt_with(&self, f: &mut Formatter<'_>, ctx: &ModuleContext) -> std::fmt::Result {
         match self {
-            CExpr::Literal(lit) => write!(f, "{}", lit),
-            CExpr::Value(val) => {
-                let name = fun.get_var_name(*val);
-                write!(f, "{}", name)
-            }
+            CExpr::Raw(lit) => write!(f, "{}", lit),
+            CExpr::Value(val) => write!(f, "{}", val),
             CExpr::BinaryOperator { lhs, rhs, op } => {
-                write!(f, "({} {} {})", lhs.display(fun), op, rhs.display(fun))
+                write!(f, "({} {} {})", lhs.display(ctx), op, rhs.display(ctx))
+            }
+            CExpr::Cast { ty, expr } => {
+                write!(f, "(({}) {})", ty.display(ctx), expr.display(ctx))
             }
             CExpr::Call { callee, args } => {
-                write!(f, "{}(", callee.display(fun))?;
+                write!(f, "{}(", callee.display(ctx))?;
                 for (i, arg) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", arg.display(fun))?;
+                    write!(f, "{}", arg.display(ctx))?;
                 }
                 write!(f, ")")
             }
             CExpr::Member { expr, arrow, field } => {
-                write!(f, "{}", expr.display(fun))?;
+                write!(f, "{}", expr.display(ctx))?;
                 if *arrow {
                     write!(f, "->")?;
                 } else {
@@ -404,4 +473,11 @@ impl CExpr {
             }
         }
     }
+}
+
+#[macro_export]
+macro_rules! c_expr {
+    ($expr: expr) => {
+        CExpr::Raw($expr.into()).into()
+    };
 }

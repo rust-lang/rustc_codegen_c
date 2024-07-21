@@ -117,27 +117,21 @@ pub struct CFunctionBuilder {
     pub ty: CType,
     pub params: Vec<(CType, CValue)>,
     pub body: Vec<CStmt>,
-    pub var_names: FxHashMap<CValue, String>,
+
     var_counter: usize,
 }
 
 impl CFunctionBuilder {
     pub fn new(name: String, ty: CType, params: Vec<CType>) -> Self {
         let params: Vec<_> =
-            params.into_iter().enumerate().map(|(i, ty)| (ty, CValue::Var(i))).collect();
+            params.into_iter().enumerate().map(|(i, ty)| (ty, CValue::Local(i))).collect();
         let var_counter = params.len();
 
-        Self { name, ty, params, body: Vec::new(), var_counter, var_names: FxHashMap::default() }
+        Self { name, ty, params, body: Vec::new(), var_counter }
     }
 
     pub fn build(self) -> CFunction {
-        CFunction {
-            name: self.name,
-            ty: self.ty,
-            params: self.params,
-            body: self.body,
-            var_names: self.var_names,
-        }
+        CFunction { name: self.name, ty: self.ty, params: self.params, body: self.body }
     }
 
     pub fn decl(&self) -> CDecl {
@@ -149,7 +143,7 @@ impl CFunctionBuilder {
     }
 
     pub fn next_value(&mut self) -> CValue {
-        let val = CValue::Var(self.var_counter);
+        let val = CValue::Local(self.var_counter);
         self.var_counter += 1;
         val
     }
