@@ -9,12 +9,10 @@ use rustc_errors::{DiagCtxtHandle, FatalError};
 use rustc_session::config::OutputType;
 use tracing::error;
 
-use crate::module::ModuleContext;
-
 pub(crate) unsafe fn codegen(
     cgcx: &CodegenContext<crate::CCodegen>,
     _dcx: DiagCtxtHandle<'_>,
-    module: ModuleCodegen<ModuleContext>,
+    module: ModuleCodegen<String>,
     _config: &ModuleConfig,
 ) -> Result<CompiledModule, FatalError> {
     let module_name = module.name.clone();
@@ -28,9 +26,9 @@ pub(crate) unsafe fn codegen(
     write!(&c_out_file, "{}", module.module_llvm).map_err(|_| FatalError)?;
 
     // invoke cc to compile
-    // TODO: configure cc
-    // TODO: handle long command line (windows)
-    // TODO: flush_linked_file (windows)
+    // FIXME: configure cc
+    // FIXME: handle long command line (windows)
+    // FIXME: flush_linked_file (windows)
     let mut cmd = Command::new("clang");
     cmd.arg(&c_out).arg("-o").arg(&obj_out).arg("-c");
     let mut cmd = cmd.command();
@@ -40,10 +38,7 @@ pub(crate) unsafe fn codegen(
         .spawn()
         .and_then(|child| child.wait_with_output())
     {
-        Ok(output) => {
-            output
-            // flush_linked_file(&output, out_filename)?;
-        }
+        Ok(output) => output,
         Err(e) => {
             error!("failed to spawn C compiler: {}", e);
             return Err(FatalError);
@@ -62,7 +57,7 @@ pub(crate) unsafe fn codegen(
 pub(crate) fn link(
     _cgcx: &CodegenContext<crate::CCodegen>,
     _dcx: DiagCtxtHandle<'_>,
-    mut _modules: Vec<ModuleCodegen<ModuleContext>>,
-) -> Result<ModuleCodegen<ModuleContext>, FatalError> {
+    mut _modules: Vec<ModuleCodegen<String>>,
+) -> Result<ModuleCodegen<String>, FatalError> {
     unimplemented!();
 }

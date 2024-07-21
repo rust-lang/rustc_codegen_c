@@ -7,7 +7,7 @@ use rustc_type_ir::TyKind;
 
 use crate::context::CodegenCx;
 
-impl<'tcx> LayoutTypeMethods<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> LayoutTypeMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     fn backend_type(&self, layout: TyAndLayout<'tcx>) -> Self::Type {
         todo!()
     }

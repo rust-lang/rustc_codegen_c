@@ -1,10 +1,10 @@
+use rustc_codegen_c_ast::expr::CValue;
 use rustc_codegen_ssa::traits::ConstMethods;
 use rustc_const_eval::interpret::{ConstAllocation, Scalar};
 
 use crate::context::CodegenCx;
-use crate::module::CValue;
 
-impl<'tcx> ConstMethods<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> ConstMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     fn const_null(&self, t: Self::Type) -> Self::Value {
         todo!()
     }

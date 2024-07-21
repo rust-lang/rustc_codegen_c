@@ -7,7 +7,7 @@ use rustc_middle::ty::{Instance, PolyExistentialTraitRef, Ty};
 
 use crate::context::CodegenCx;
 
-impl<'tcx> MiscMethods<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> MiscMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     fn vtables(
         &self,
     ) -> &RefCell<FxHashMap<(Ty<'tcx>, Option<PolyExistentialTraitRef<'tcx>>), Self::Value>> {

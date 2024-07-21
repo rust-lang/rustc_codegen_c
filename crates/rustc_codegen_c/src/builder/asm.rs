@@ -4,7 +4,7 @@ use rustc_middle::ty::Instance;
 
 use crate::builder::Builder;
 
-impl<'tcx> AsmBuilderMethods<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> AsmBuilderMethods<'tcx> for Builder<'_, 'tcx, 'mx> {
     fn codegen_inline_asm(
         &mut self,
         template: &[InlineAsmTemplatePiece],

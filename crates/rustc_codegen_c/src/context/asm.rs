@@ -3,7 +3,7 @@ use rustc_codegen_ssa::traits::{AsmMethods, GlobalAsmOperandRef};
 
 use crate::context::CodegenCx;
 
-impl<'tcx> AsmMethods<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> AsmMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     fn codegen_global_asm(
         &self,
         template: &[InlineAsmTemplatePiece],
