@@ -10,6 +10,6 @@ pub fn main() -> i32 {
 }
 
 #[no_mangle]
-pub fn foo(x: u64) -> u64 {
-    x
+pub fn foo(x: u8) -> i64 {
+    x as i64
 }
