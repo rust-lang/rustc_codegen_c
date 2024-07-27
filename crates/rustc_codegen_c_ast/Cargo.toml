@@ -1,13 +1,9 @@
 [package]
-name = "rustc_codegen_c"
+name = "rustc_codegen_c_ast"
 edition = "2021"
 version.workspace = true
 
-[lib]
-crate-type = ["dylib"]
-
 [dependencies]
-rustc_codegen_c_ast = { path = "../rustc_codegen_c_ast" }
 
 # This package uses rustc crates.
 [package.metadata.rust-analyzer]

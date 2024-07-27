@@ -2,7 +2,7 @@ use rustc_codegen_ssa::traits::DebugInfoBuilderMethods;
 
 use crate::builder::Builder;
 
-impl DebugInfoBuilderMethods for Builder<'_, '_> {
+impl DebugInfoBuilderMethods for Builder<'_, '_, '_> {
     fn dbg_var_addr(
         &mut self,
         dbg_var: Self::DIVariable,

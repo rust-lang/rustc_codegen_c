@@ -1,19 +1,19 @@
+use rustc_codegen_c_ast::expr::CValue;
 use rustc_codegen_ssa::mir::place::PlaceRef;
 use rustc_codegen_ssa::traits::{AbiBuilderMethods, ArgAbiMethods};
 use rustc_middle::ty::Ty;
 use rustc_target::abi::call::ArgAbi;
 
 use crate::builder::Builder;
-use crate::module::CValue;
 
-impl<'tcx> AbiBuilderMethods<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> AbiBuilderMethods<'tcx> for Builder<'_, 'tcx, 'mx> {
     fn get_param(&mut self, index: usize) -> Self::Value {
         // Params are first n variables in the function
         CValue::Local(index)
     }
 }
 
-impl<'tcx> ArgAbiMethods<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> ArgAbiMethods<'tcx> for Builder<'_, 'tcx, 'mx> {
     fn store_fn_arg(
         &mut self,
         arg_abi: &ArgAbi<'tcx, Ty<'tcx>>,

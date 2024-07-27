@@ -3,6 +3,10 @@
 use std::cell::RefCell;
 
 use rustc_abi::{HasDataLayout, TargetDataLayout};
+use rustc_codegen_c_ast::expr::CValue;
+use rustc_codegen_c_ast::func::CFunc;
+use rustc_codegen_c_ast::r#type::CTy;
+use rustc_codegen_c_ast::ModuleCtxt;
 use rustc_codegen_ssa::traits::BackendTypes;
 use rustc_hash::FxHashMap;
 use rustc_middle::ty::layout::{
@@ -12,9 +16,6 @@ use rustc_middle::ty::layout::{
 use rustc_middle::ty::{Instance, ParamEnv, Ty, TyCtxt};
 use rustc_target::abi::call::FnAbi;
 use rustc_target::spec::{HasTargetSpec, Target};
-
-use crate::module::{CDecl, CFunction, CStmt, CType, CValue, ModuleContext};
-use crate::utils::slab::{Id, Slab};
 
 mod asm;
 mod base_type;
@@ -26,72 +27,55 @@ mod pre_define;
 mod r#static;
 mod type_membership;
 
-pub struct CodegenCx<'tcx> {
+pub struct CodegenCx<'tcx, 'mx> {
     pub tcx: TyCtxt<'tcx>,
-    pub mcx: ModuleContext,
-    pub function_instances: RefCell<FxHashMap<Instance<'tcx>, Id<CFunctionBuilder>>>,
-    // TODO: better inner mutablity for slab
-    pub functions: RefCell<Slab<CFunctionBuilder>>,
+    pub mcx: ModuleCtxt<'mx>,
+    pub function_instances: RefCell<FxHashMap<Instance<'tcx>, CFunc<'mx>>>,
 }
 
-impl<'tcx> CodegenCx<'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>) -> Self {
-        let mcx = ModuleContext::new();
-        Self {
-            tcx,
-            mcx,
-            function_instances: RefCell::new(FxHashMap::default()),
-            functions: RefCell::new(Slab::default()),
-        }
-    }
-
-    pub fn finish(mut self) -> ModuleContext {
-        for function in self.functions.borrow().iter() {
-            self.mcx.module.decls.push(function.decl());
-        }
-        for function in self.functions.into_inner() {
-            self.mcx.module.decls.push(CDecl::Function(function.build()));
-        }
-        self.mcx
+impl<'tcx, 'mx> CodegenCx<'tcx, 'mx> {
+    pub fn new(tcx: TyCtxt<'tcx>, mcx: ModuleCtxt<'mx>) -> Self {
+        mcx.module().push_include("stdint.h");
+        Self { tcx, mcx, function_instances: RefCell::new(FxHashMap::default()) }
     }
 }
 
-impl<'tcx> BackendTypes for CodegenCx<'tcx> {
+impl<'tcx, 'mx> BackendTypes for CodegenCx<'tcx, 'mx> {
     type Value = CValue;
-    type Function = Id<CFunctionBuilder>;
-    type BasicBlock = Id<CFunctionBuilder>;
-    type Type = CType;
+    type Function = CFunc<'mx>;
+    type BasicBlock = CFunc<'mx>;
+    type Type = CTy<'mx>;
     type Funclet = ();
     type DIScope = ();
     type DILocation = ();
     type DIVariable = ();
 }
 
-impl<'tcx> HasTargetSpec for CodegenCx<'tcx> {
+impl<'tcx, 'mx> HasTargetSpec for CodegenCx<'tcx, 'mx> {
     fn target_spec(&self) -> &Target {
         todo!()
     }
 }
 
-impl<'tcx> HasParamEnv<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> HasParamEnv<'tcx> for CodegenCx<'tcx, 'mx> {
     fn param_env(&self) -> ParamEnv<'tcx> {
         ParamEnv::reveal_all()
     }
 }
 
-impl<'tcx> HasTyCtxt<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> HasTyCtxt<'tcx> for CodegenCx<'tcx, 'mx> {
     fn tcx(&self) -> TyCtxt<'tcx> {
         self.tcx
     }
 }
 
-impl HasDataLayout for CodegenCx<'_> {
+impl<'tcx, 'mx> HasDataLayout for CodegenCx<'tcx, 'mx> {
     fn data_layout(&self) -> &TargetDataLayout {
         todo!()
     }
 }
 
-impl<'tcx> LayoutOfHelpers<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> LayoutOfHelpers<'tcx> for CodegenCx<'tcx, 'mx> {
     type LayoutOfResult = TyAndLayout<'tcx>;
 
     fn handle_layout_err(&self, err: LayoutError<'tcx>, span: rustc_span::Span, ty: Ty<'tcx>) -> ! {
@@ -99,7 +83,7 @@ impl<'tcx> LayoutOfHelpers<'tcx> for CodegenCx<'tcx> {
     }
 }
 
-impl<'tcx> FnAbiOfHelpers<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> FnAbiOfHelpers<'tcx> for CodegenCx<'tcx, 'mx> {
     type FnAbiOfResult = &'tcx FnAbi<'tcx, Ty<'tcx>>;
 
     fn handle_fn_abi_err(
@@ -109,46 +93,5 @@ impl<'tcx> FnAbiOfHelpers<'tcx> for CodegenCx<'tcx> {
         fn_abi_request: FnAbiRequest<'tcx>,
     ) -> ! {
         todo!()
-    }
-}
-
-pub struct CFunctionBuilder {
-    pub name: String,
-    pub ty: CType,
-    pub params: Vec<(CType, CValue)>,
-    pub body: Vec<CStmt>,
-
-    var_counter: usize,
-}
-
-impl CFunctionBuilder {
-    pub fn new(name: String, ty: CType, params: Vec<CType>) -> Self {
-        let params: Vec<_> =
-            params.into_iter().enumerate().map(|(i, ty)| (ty, CValue::Local(i))).collect();
-        let var_counter = params.len();
-
-        Self { name, ty, params, body: Vec::new(), var_counter }
-    }
-
-    pub fn build(self) -> CFunction {
-        CFunction { name: self.name, ty: self.ty, params: self.params, body: self.body }
-    }
-
-    pub fn decl(&self) -> CDecl {
-        CDecl::FunctionDecl {
-            name: self.name.clone(),
-            ty: self.ty,
-            params: self.params.iter().map(|(ty, _)| *ty).collect(),
-        }
-    }
-
-    pub fn next_value(&mut self) -> CValue {
-        let val = CValue::Local(self.var_counter);
-        self.var_counter += 1;
-        val
-    }
-
-    pub fn push_stmt(&mut self, stmt: CStmt) {
-        self.body.push(stmt);
     }
 }

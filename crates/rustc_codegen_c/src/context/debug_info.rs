@@ -6,7 +6,7 @@ use rustc_target::abi::call::FnAbi;
 
 use crate::context::CodegenCx;
 
-impl<'tcx> DebugInfoMethods<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> DebugInfoMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     fn create_vtable_debuginfo(
         &self,
         ty: Ty<'tcx>,

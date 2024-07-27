@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use rustc_codegen_c_ast::{ModuleArena, ModuleCtxt};
 use rustc_codegen_ssa::mono_item::MonoItemExt;
 use rustc_codegen_ssa::{ModuleCodegen, ModuleKind};
 use rustc_middle::dep_graph;
@@ -7,7 +8,9 @@ use rustc_middle::ty::TyCtxt;
 
 use crate::builder::Builder;
 use crate::context::CodegenCx;
-use crate::module::ModuleContext;
+
+/// Needed helper functions
+const HELPER: &str = include_str!("./helper.h");
 
 // note: parallel
 // it seems this function will be invoked parallelly (if parallel codegen is enabled)
@@ -15,7 +18,7 @@ use crate::module::ModuleContext;
 pub fn compile_codegen_unit(
     tcx: TyCtxt<'_>,
     cgu_name: rustc_span::Symbol,
-) -> (ModuleCodegen<ModuleContext>, u64) {
+) -> (ModuleCodegen<String>, u64) {
     let start_time = Instant::now();
 
     let dep_node = tcx.codegen_unit(cgu_name).codegen_dep_node(tcx);
@@ -36,24 +39,23 @@ pub fn compile_codegen_unit(
     (module, cost)
 }
 
-fn module_codegen(tcx: TyCtxt<'_>, cgu_name: rustc_span::Symbol) -> ModuleCodegen<ModuleContext> {
+fn module_codegen(tcx: TyCtxt<'_>, cgu_name: rustc_span::Symbol) -> ModuleCodegen<String> {
     let cgu = tcx.codegen_unit(cgu_name);
 
-    let cx = CodegenCx::new(tcx);
+    let mcx = ModuleArena::new(HELPER);
+    let mcx = ModuleCtxt(&mcx);
+    let cx = CodegenCx::new(tcx, mcx);
 
     let mono_items = cgu.items_in_deterministic_order(tcx);
     for &(mono_item, data) in &mono_items {
-        mono_item.predefine::<Builder<'_, '_>>(&cx, data.linkage, data.visibility);
+        mono_item.predefine::<Builder<'_, '_, '_>>(&cx, data.linkage, data.visibility);
     }
 
     // ... and now that we have everything pre-defined, fill out those definitions.
     for &(mono_item, _) in &mono_items {
-        mono_item.define::<Builder<'_, '_>>(&cx);
+        mono_item.define::<Builder<'_, '_, '_>>(&cx);
     }
 
-    ModuleCodegen {
-        name: cgu_name.to_string(),
-        module_llvm: cx.finish(),
-        kind: ModuleKind::Regular,
-    }
+    let module = mcx.to_string();
+    ModuleCodegen { name: cgu_name.to_string(), module_llvm: module, kind: ModuleKind::Regular }
 }

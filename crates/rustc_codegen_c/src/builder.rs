@@ -3,6 +3,8 @@
 use std::ops::Deref;
 
 use rustc_abi::{HasDataLayout, TargetDataLayout};
+use rustc_codegen_c_ast::func::CFunc;
+use rustc_codegen_c_ast::r#type::CTy;
 use rustc_codegen_ssa::traits::{BackendTypes, BuilderMethods, HasCodegen};
 use rustc_middle::ty::layout::{
     FnAbiError, FnAbiOfHelpers, FnAbiRequest, HasParamEnv, HasTyCtxt, LayoutError, LayoutOfHelpers,
@@ -12,10 +14,7 @@ use rustc_middle::ty::{ParamEnv, Ty, TyCtxt};
 use rustc_target::abi::call::FnAbi;
 use rustc_target::spec::{HasTargetSpec, Target};
 
-use crate::c_expr;
-use crate::context::{CFunctionBuilder, CodegenCx};
-use crate::module::{CDecl, CExpr, CStmt, CType};
-use crate::utils::slab::Id;
+use crate::context::CodegenCx;
 
 mod abi;
 mod asm;
@@ -24,60 +23,60 @@ mod debug_info;
 mod intrinsic_call;
 mod r#static;
 
-pub struct Builder<'a, 'tcx> {
-    pub cx: &'a CodegenCx<'tcx>,
-    bb: Id<CFunctionBuilder>,
+pub struct Builder<'a, 'tcx, 'mx> {
+    pub cx: &'a CodegenCx<'tcx, 'mx>,
+    bb: CFunc<'mx>,
 }
 
-impl<'a, 'tcx> Deref for Builder<'a, 'tcx> {
-    type Target = CodegenCx<'tcx>;
+impl<'a, 'tcx, 'mx> Deref for Builder<'a, 'tcx, 'mx> {
+    type Target = CodegenCx<'tcx, 'mx>;
 
     fn deref<'b>(&'b self) -> &'a Self::Target {
         self.cx
     }
 }
 
-impl<'tcx> HasCodegen<'tcx> for Builder<'_, 'tcx> {
-    type CodegenCx = CodegenCx<'tcx>;
+impl<'tcx, 'mx> HasCodegen<'tcx> for Builder<'_, 'tcx, 'mx> {
+    type CodegenCx = CodegenCx<'tcx, 'mx>;
 }
 
-impl<'tcx> HasDataLayout for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> HasDataLayout for Builder<'_, 'tcx, 'mx> {
     fn data_layout(&self) -> &TargetDataLayout {
         todo!()
     }
 }
 
-impl<'tcx> HasTyCtxt<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> HasTyCtxt<'tcx> for Builder<'_, 'tcx, 'mx> {
     fn tcx(&self) -> TyCtxt<'tcx> {
         self.cx.tcx()
     }
 }
 
-impl<'tcx> HasParamEnv<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> HasParamEnv<'tcx> for Builder<'_, 'tcx, 'mx> {
     fn param_env(&self) -> ParamEnv<'tcx> {
         self.cx.param_env()
     }
 }
 
-impl<'tcx> BackendTypes for Builder<'_, 'tcx> {
-    type Value = <CodegenCx<'tcx> as BackendTypes>::Value;
-    type Function = <CodegenCx<'tcx> as BackendTypes>::Function;
-    type BasicBlock = <CodegenCx<'tcx> as BackendTypes>::BasicBlock;
-    type Type = <CodegenCx<'tcx> as BackendTypes>::Type;
-    type Funclet = <CodegenCx<'tcx> as BackendTypes>::Funclet;
+impl<'tcx, 'mx> BackendTypes for Builder<'_, 'tcx, 'mx> {
+    type Value = <CodegenCx<'tcx, 'mx> as BackendTypes>::Value;
+    type Function = <CodegenCx<'tcx, 'mx> as BackendTypes>::Function;
+    type BasicBlock = <CodegenCx<'tcx, 'mx> as BackendTypes>::BasicBlock;
+    type Type = <CodegenCx<'tcx, 'mx> as BackendTypes>::Type;
+    type Funclet = <CodegenCx<'tcx, 'mx> as BackendTypes>::Funclet;
 
-    type DIScope = <CodegenCx<'tcx> as BackendTypes>::DIScope;
-    type DILocation = <CodegenCx<'tcx> as BackendTypes>::DILocation;
-    type DIVariable = <CodegenCx<'tcx> as BackendTypes>::DIVariable;
+    type DIScope = <CodegenCx<'tcx, 'mx> as BackendTypes>::DIScope;
+    type DILocation = <CodegenCx<'tcx, 'mx> as BackendTypes>::DILocation;
+    type DIVariable = <CodegenCx<'tcx, 'mx> as BackendTypes>::DIVariable;
 }
 
-impl<'tcx> HasTargetSpec for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> HasTargetSpec for Builder<'_, 'tcx, 'mx> {
     fn target_spec(&self) -> &Target {
         todo!()
     }
 }
 
-impl<'tcx> LayoutOfHelpers<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> LayoutOfHelpers<'tcx> for Builder<'_, 'tcx, 'mx> {
     type LayoutOfResult = TyAndLayout<'tcx>;
 
     fn handle_layout_err(&self, err: LayoutError<'tcx>, span: rustc_span::Span, ty: Ty<'tcx>) -> ! {
@@ -85,7 +84,7 @@ impl<'tcx> LayoutOfHelpers<'tcx> for Builder<'_, 'tcx> {
     }
 }
 
-impl<'tcx> FnAbiOfHelpers<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> FnAbiOfHelpers<'tcx> for Builder<'_, 'tcx, 'mx> {
     type FnAbiOfResult = &'tcx FnAbi<'tcx, Ty<'tcx>>;
 
     fn handle_fn_abi_err(
@@ -98,7 +97,7 @@ impl<'tcx> FnAbiOfHelpers<'tcx> for Builder<'_, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
+impl<'a, 'tcx, 'mx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx, 'mx> {
     fn build(cx: &'a Self::CodegenCx, llbb: Self::BasicBlock) -> Self {
         Self { cx, bb: llbb }
     }
@@ -128,13 +127,11 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
     }
 
     fn ret_void(&mut self) {
-        let mut functions = self.cx.functions.borrow_mut();
-        functions[self.bb].push_stmt(CStmt::Return(None));
+        self.bb.0.push_stmt(self.cx.mcx.ret(None));
     }
 
     fn ret(&mut self, v: Self::Value) {
-        let mut functions = self.cx.functions.borrow_mut();
-        functions[self.bb].push_stmt(CStmt::Return(Some(Box::new(CExpr::Value(v)))));
+        self.bb.0.push_stmt(self.cx.mcx.ret(Some(self.cx.mcx.value(v))))
     }
 
     fn br(&mut self, dest: Self::BasicBlock) {
@@ -510,33 +507,23 @@ impl<'a, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx> {
     /// integer via explicit conversion. Then, use a helper function to cast the
     /// result to a signed integer.
     fn intcast(&mut self, val: Self::Value, dest_ty: Self::Type, is_signed: bool) -> Self::Value {
-        let mut functions = self.cx.functions.borrow_mut();
-        let function = &mut functions[self.bb];
-        let ret = function.next_value();
+        let mcx = self.cx.mcx;
+        let ret = self.bb.0.next_local_var();
 
-        let dest = if let CType::Primitive(ty) = dest_ty { ty } else { unreachable!() };
-        let cast = if !dest.is_signed() {
-            CExpr::Cast { ty: CType::Primitive(dest), expr: Box::new(CExpr::Value(val)) }
-        } else {
-            let cast = CExpr::Cast {
-                ty: CType::Primitive(dest.to_unsigned()),
-                expr: Box::new(CExpr::Value(val)),
-            };
-            CExpr::Call {
-                callee: c_expr!("__rust_utos"),
-                args: vec![
-                    c_expr!(dest.to_unsigned().to_string()),
-                    c_expr!(dest.to_string()),
+        let dest = if let CTy::Primitive(ty) = dest_ty { ty } else { unreachable!() };
+        let mut cast = mcx.cast(CTy::Primitive(dest), mcx.value(val));
+        if dest.is_signed() {
+            cast = mcx.call(
+                mcx.raw("__rust_utos"),
+                vec![
+                    mcx.raw(dest.to_unsigned().to_str()),
+                    mcx.raw(dest.to_str()),
                     cast,
-                    c_expr!(dest.max_value()),
+                    mcx.raw(dest.max_value()),
                 ],
-            }
-        };
-        function.push_stmt(CStmt::Decl(Box::new(CDecl::Var {
-            name: ret,
-            ty: dest_ty,
-            init: Some(cast),
-        })));
+            );
+        }
+        self.bb.0.push_stmt(mcx.decl_stmt(mcx.var(ret, dest_ty, Some(cast))));
         ret
     }
 
