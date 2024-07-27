@@ -1,6 +1,5 @@
 #![feature(rustc_private)]
 
-extern crate parking_lot;
 extern crate rustc_abi;
 extern crate rustc_ast;
 extern crate rustc_codegen_ssa;
@@ -17,7 +16,6 @@ extern crate rustc_session;
 extern crate rustc_span;
 extern crate rustc_target;
 extern crate rustc_type_ir;
-extern crate sharded_slab;
 extern crate tracing;
 
 use std::sync::Arc;
@@ -44,14 +42,10 @@ use rustc_session::config::{OptLevel, OutputFilenames};
 use rustc_session::Session;
 use rustc_span::ErrorGuaranteed;
 
-use crate::module::ModuleContext;
-
 mod archive;
 mod base;
 mod builder;
 mod context;
-mod module;
-mod utils;
 mod write;
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }
@@ -158,7 +152,7 @@ impl ThinBufferMethods for ThinBuffer {
 }
 
 impl WriteBackendMethods for CCodegen {
-    type Module = ModuleContext;
+    type Module = String;
     type TargetMachine = ();
     type TargetMachineError = ();
     type ModuleBuffer = ModuleBuffer;

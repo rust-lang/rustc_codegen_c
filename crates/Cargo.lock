@@ -5,6 +5,9 @@ version = 3
 [[package]]
 name = "rustc_codegen_c"
 version = "0.1.0"
+dependencies = [
+ "rustc_codegen_c_ast",
+]
 
 [[package]]
 name = "rustc_codegen_c_ast"

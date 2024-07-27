@@ -5,7 +5,7 @@ use rustc_target::abi::call::FnAbi;
 
 use crate::builder::Builder;
 
-impl<'tcx> IntrinsicCallMethods<'tcx> for Builder<'_, 'tcx> {
+impl<'tcx, 'mx> IntrinsicCallMethods<'tcx> for Builder<'_, 'tcx, 'mx> {
     fn codegen_intrinsic_call(
         &mut self,
         instance: Instance<'tcx>,

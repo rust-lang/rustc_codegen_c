@@ -4,7 +4,7 @@ use rustc_hir::def_id::DefId;
 
 use crate::context::CodegenCx;
 
-impl<'tcx> StaticMethods for CodegenCx<'tcx> {
+impl<'tcx, 'mx> StaticMethods for CodegenCx<'tcx, 'mx> {
     fn static_addr_of(&self, cv: Self::Value, align: Align, kind: Option<&str>) -> Self::Value {
         todo!()
     }

@@ -9,12 +9,12 @@ use rustc_errors::{DiagCtxtHandle, FatalError};
 use rustc_session::config::OutputType;
 use tracing::error;
 
-use crate::module::ModuleContext;
+// use crate::module::String;
 
 pub(crate) unsafe fn codegen(
     cgcx: &CodegenContext<crate::CCodegen>,
     _dcx: DiagCtxtHandle<'_>,
-    module: ModuleCodegen<ModuleContext>,
+    module: ModuleCodegen<String>,
     _config: &ModuleConfig,
 ) -> Result<CompiledModule, FatalError> {
     let module_name = module.name.clone();
@@ -62,7 +62,7 @@ pub(crate) unsafe fn codegen(
 pub(crate) fn link(
     _cgcx: &CodegenContext<crate::CCodegen>,
     _dcx: DiagCtxtHandle<'_>,
-    mut _modules: Vec<ModuleCodegen<ModuleContext>>,
-) -> Result<ModuleCodegen<ModuleContext>, FatalError> {
+    mut _modules: Vec<ModuleCodegen<String>>,
+) -> Result<ModuleCodegen<String>, FatalError> {
     unimplemented!();
 }

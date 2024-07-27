@@ -2,7 +2,7 @@ use rustc_codegen_ssa::traits::BaseTypeMethods;
 
 use crate::context::CodegenCx;
 
-impl<'tcx> BaseTypeMethods<'tcx> for CodegenCx<'tcx> {
+impl<'tcx, 'mx> BaseTypeMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     fn type_i8(&self) -> Self::Type {
         todo!()
     }
