@@ -1,0 +1,76 @@
+name: CI
+on: [push, pull_request]
+
+env:
+  RUSTDOCFLAGS: -D warnings
+  RUSTFLAGS: -D warnings
+
+jobs:
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: |
+          rustup update nightly --no-self-update
+          rustup default nightly
+          rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+      # FIXME: enable once there is code
+      # - run: cargo clippy --all-features --all-targets -- -D warnings
+  
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: |
+          rustup update nightly --no-self-update
+          rustup default nightly
+          rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+      # FIXME: enable once there is code
+      # - run: cargo test
+
+  rustfmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        run: |
+          rustup update nightly --no-self-update
+          rustup default nightly 
+          rustup component add rustfmt
+      # FIXME: enable once there is code
+      # - run: cargo fmt --all -- --check
+
+  doc:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rustup update nightly --no-self-update
+          rustup default nightly 
+      - uses: Swatinem/rust-cache@v2
+      # FIXME: enable once there is code
+      # - run: cargo doc
+
+  success:
+    needs:
+      - clippy
+      - test
+      - rustfmt
+      - doc
+    runs-on: ubuntu-latest
+    # GitHub branch protection is exceedingly silly and treats "jobs skipped because a dependency
+    # failed" as success. So we have to do some contortions to ensure the job fails if any of its
+    # dependencies fails.
+    if: always() # make sure this is never "skipped"
+    steps:
+      # Manually check the status of all dependencies. `if: failure()` does not work.
+      - name: check if any dependency failed
+        run: jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
