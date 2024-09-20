@@ -8,7 +8,7 @@ pub struct CleanCommand {}
 
 impl CleanCommand {
     pub fn run(&self, manifest: &Manifest) {
-        std::fs::remove_dir_all("crates/target").unwrap();
-        std::fs::remove_dir_all(&manifest.out_dir).unwrap();
+        let _ = std::fs::remove_dir_all("crates/target");
+        let _ = std::fs::remove_dir_all(&manifest.out_dir);
     }
 }
