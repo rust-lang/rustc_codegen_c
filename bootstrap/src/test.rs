@@ -52,7 +52,7 @@ impl TestCommand {
                 continue;
             }
             let name = format!("example/{}", filename.to_string_lossy());
-            let output = manifest.out_dir.join("example").join(Path::new(filename));
+            let output = manifest.out_dir.join("example").join(filename);
             result.push(TestCase {
                 name,
                 source: case,
@@ -66,10 +66,7 @@ impl TestCommand {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
             let name = format!("codegen/{}", filename.to_string_lossy());
-            let output = manifest
-                .out_dir
-                .join("tests/codegen")
-                .join(Path::new(filename));
+            let output = manifest.out_dir.join("tests/codegen").join(filename);
             result.push(TestCase {
                 name,
                 source: case,
