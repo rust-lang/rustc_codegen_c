@@ -44,6 +44,10 @@ impl FmtCommand {
             command.arg("--check");
         }
         log::debug!("running {:?}", command);
-        command.status().unwrap();
+        assert!(
+            command.status().unwrap().success(),
+            "failed to run {:?}",
+            command
+        );
     }
 }
