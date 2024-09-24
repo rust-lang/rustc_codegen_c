@@ -113,12 +113,12 @@ struct FileChecker {
 impl FileChecker {
     pub fn new() -> Self {
         let filecheck = [
-            "FileCheck",
-            "FileCheck-14",
-            "FileCheck-15",
-            "FileCheck-16",
-            "FileCheck-17",
             "FileCheck-18",
+            "FileCheck-17",
+            "FileCheck-16",
+            "FileCheck-15",
+            "FileCheck-14",
+            "FileCheck",
         ]
         .into_iter()
         .find_map(|filecheck| which(filecheck).ok())
