@@ -7,14 +7,14 @@ use color_print::{cprint, cprintln};
 use glob::glob;
 use which::which;
 
-use crate::manifest::Manifest;
+use crate::{manifest::Manifest, Run};
 
 /// Run tests
 #[derive(Args, Debug)]
 pub struct TestCommand {}
 
-impl TestCommand {
-    pub fn run(&self, manifest: &Manifest) {
+impl Run for TestCommand {
+    fn run(&self, manifest: &Manifest) {
         manifest.prepare();
 
         std::panic::set_hook(Box::new(|info| {
@@ -40,7 +40,9 @@ impl TestCommand {
             cprintln!("<g>OK</g>");
         }
     }
+}
 
+impl TestCommand {
     pub fn collect_testcases(&self, manifest: &Manifest) -> Vec<TestCase> {
         let mut result = vec![];
 

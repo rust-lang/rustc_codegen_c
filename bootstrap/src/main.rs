@@ -36,6 +36,10 @@ pub enum Command {
     Fmt(fmt::FmtCommand),
 }
 
+trait Run {
+    fn run(&self, manifest: &Manifest);
+}
+
 fn main() {
     env_logger::init();
     let cli = Cli::parse();

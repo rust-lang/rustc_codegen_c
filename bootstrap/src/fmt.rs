@@ -3,6 +3,8 @@ use std::process::Command;
 use clap::Args;
 use glob::glob;
 
+use crate::Run;
+
 /// Format code, examples and tests
 #[derive(Args, Debug)]
 pub struct FmtCommand {
@@ -10,8 +12,8 @@ pub struct FmtCommand {
     pub check: bool,
 }
 
-impl FmtCommand {
-    pub fn run(&self, _manifest: &crate::manifest::Manifest) {
+impl Run for FmtCommand {
+    fn run(&self, _manifest: &crate::manifest::Manifest) {
         self.perform(
             Command::new("cargo")
                 .arg("fmt")
@@ -38,7 +40,9 @@ impl FmtCommand {
             );
         }
     }
+}
 
+impl FmtCommand {
     pub fn perform(&self, command: &mut Command) {
         if self.check {
             command.arg("--check");
