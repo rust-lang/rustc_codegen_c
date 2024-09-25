@@ -12,13 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
-        run: |
-          rustup update nightly --no-self-update
-          rustup default nightly
-          rustup component add clippy
+        run: rustup show
       - uses: Swatinem/rust-cache@v2
-      # FIXME: enable once there is code
-      # - run: cargo clippy --all-features --all-targets -- -D warnings
+      - name: Install packages
+        run: |
+          sudo apt-get install llvm-14-tools
+      - run: cargo clippy --manifest-path crates/Cargo.toml --all-features --all-targets -- -D warnings
   
   test:
     name: test
@@ -26,38 +25,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
-        run: |
-          rustup update nightly --no-self-update
-          rustup default nightly
-          rustup component add clippy
+        run: rustup show
       - uses: Swatinem/rust-cache@v2
-      # FIXME: enable once there is code
-      # - run: cargo test
+      - name: Install packages
+        run: |
+          sudo apt-get install llvm-14-tools
+      - run: ./y test
 
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
       - name: Install Rust
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Install packages
         run: |
-          rustup update nightly --no-self-update
-          rustup default nightly 
-          rustup component add rustfmt
-      # FIXME: enable once there is code
-      # - run: cargo fmt --all -- --check
+          sudo apt-get install llvm-14-tools
+      - run: ./y fmt --check
 
   doc:
     name: docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          rustup update nightly --no-self-update
-          rustup default nightly 
+      - name: Install Rust
+        run: rustup show
       - uses: Swatinem/rust-cache@v2
-      # FIXME: enable once there is code
-      # - run: cargo doc
+      - name: Install packages
+        run: |
+          sudo apt-get install llvm-14-tools
+      - run: cargo doc --manifest-path crates/Cargo.toml
 
   success:
     needs:

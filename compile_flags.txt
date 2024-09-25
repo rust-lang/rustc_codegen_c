@@ -1,0 +1,3 @@
+--std=c99
+-I
+rust_runtime
