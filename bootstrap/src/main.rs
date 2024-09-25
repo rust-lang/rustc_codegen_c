@@ -20,9 +20,9 @@ pub struct Cli {
     #[arg(short, long)]
     pub out_dir: Option<String>,
 
-    /// debug mode
+    /// verbose output
     #[arg(short, long)]
-    pub debug: bool,
+    pub verbose: bool,
 
     #[command(subcommand)]
     pub command: Command,
@@ -41,7 +41,7 @@ fn main() {
     let cli = Cli::parse();
 
     let manifest = Manifest {
-        debug: cli.debug,
+        verbose: cli.verbose,
         release: cli.release,
         out_dir: cli.out_dir.unwrap_or("build".to_string()).into(),
     };

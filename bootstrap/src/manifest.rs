@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub struct Manifest {
-    pub debug: bool,
+    pub verbose: bool,
     pub release: bool,
     pub out_dir: PathBuf,
 }
@@ -17,7 +17,7 @@ impl Manifest {
         command
             .arg("build")
             .args(["--manifest-path", "crates/Cargo.toml"]);
-        if self.debug {
+        if self.verbose {
             command.args(["-F", "debug"]);
         }
         if self.release {
@@ -71,7 +71,7 @@ impl Manifest {
             .env("CFLAGS", "-Irust_runtime")
             .arg("-lc")
             .arg("-lrust_runtime");
-        if self.debug {
+        if self.verbose {
             command.env("RUST_BACKTRACE", "full");
         }
         command
