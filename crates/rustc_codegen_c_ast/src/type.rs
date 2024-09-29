@@ -1,7 +1,8 @@
 use rustc_data_structures::intern::Interned;
 use rustc_type_ir::{IntTy, UintTy};
 
-use crate::{pretty::Printer, ModuleCtxt};
+use crate::pretty::Printer;
+use crate::ModuleCtxt;
 
 /// C types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
