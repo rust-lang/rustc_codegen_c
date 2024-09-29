@@ -37,7 +37,7 @@ impl Run for TestCommand {
                 TestType::FileCheck => {
                     cprint!("File checking {}...", testcase.name);
                     testcase.build(manifest);
-                    filechecker.run(&testcase.source, &testcase.output);
+                    filechecker.run(&testcase.source, &testcase.output_file);
                 }
                 TestType::Compile => {
                     cprint!("Compiling {}...", testcase.name);
@@ -57,26 +57,22 @@ impl TestCommand {
     pub fn collect_testcases(&self, manifest: &Manifest) -> Vec<TestCase> {
         let mut result = vec![];
 
-        // Examples
-        for case in glob("example/*.rs").unwrap() {
+        // Test auxiliary (should compile first)
+        for case in glob("tests/auxiliary/*.rs").unwrap() {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
-            if filename == "mini_core" {
-                // First compile mini_core
-                result.insert(
-                    0,
-                    TestCase {
-                        name: "mini_core".into(),
-                        source: case.clone(),
-                        output: manifest.out_dir.join(Path::new(filename)),
-                        test: TestType::CompileLib,
-                    },
-                );
-                continue;
-            }
-            let name = format!("example/{}", filename.to_string_lossy());
-            let output = manifest.out_dir.join("example").join(filename);
-            result.push(TestCase { name, source: case, output, test: TestType::Compile })
+            let name = format!("auxiliary/{}", filename.to_string_lossy());
+            let output_file = manifest.out_dir.join(filename);
+            result.push(TestCase { name, source: case, output_file, test: TestType::CompileLib })
+        }
+
+        // Examples
+        for case in glob("examples/*.rs").unwrap() {
+            let case = case.unwrap();
+            let filename = case.file_stem().unwrap();
+            let name = format!("examples/{}", filename.to_string_lossy());
+            let output_file = manifest.out_dir.join("examples").join(filename);
+            result.push(TestCase { name, source: case, output_file, test: TestType::Compile })
         }
 
         // Codegen tests
@@ -84,8 +80,8 @@ impl TestCommand {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
             let name = format!("codegen/{}", filename.to_string_lossy());
-            let output = manifest.out_dir.join("tests/codegen").join(filename);
-            result.push(TestCase { name, source: case, output, test: TestType::FileCheck })
+            let output_file = manifest.out_dir.join("tests/codegen").join(filename);
+            result.push(TestCase { name, source: case, output_file, test: TestType::FileCheck })
         }
 
         result
@@ -102,33 +98,35 @@ pub enum TestType {
 pub struct TestCase {
     pub name: String,
     pub source: PathBuf,
-    pub output: PathBuf,
+    pub output_file: PathBuf,
     pub test: TestType,
 }
 
 impl TestCase {
     pub fn build(&self, manifest: &Manifest) {
-        std::fs::create_dir_all(self.output.parent().unwrap()).unwrap();
+        let output_dir = self.output_file.parent().unwrap();
+        std::fs::create_dir_all(output_dir).unwrap();
         let mut command = manifest.rustc();
         command
             .args(["--crate-type", "bin"])
             .arg("-O")
             .arg(&self.source)
             .arg("-o")
-            .arg(&self.output);
+            .arg(&self.output_file);
         log::debug!("running {:?}", command);
         command.status().unwrap();
     }
 
     pub fn build_lib(&self, manifest: &Manifest) {
-        std::fs::create_dir_all(self.output.parent().unwrap()).unwrap();
+        let output_dir = self.output_file.parent().unwrap();
+        std::fs::create_dir_all(output_dir).unwrap();
         let mut command = manifest.rustc();
         command
             .args(["--crate-type", "lib"])
             .arg("-O")
             .arg(&self.source)
             .arg("--out-dir")
-            .arg(self.output.parent().unwrap());
+            .arg(self.output_file.parent().unwrap());
         log::debug!("running {:?}", command);
         command.status().unwrap();
     }
