@@ -1,4 +1,5 @@
 # rustc_codegen_c
+
 C based backend for rustc
 
 [![CI](https://github.com/rust-lang/rustc_codegen_c/actions/workflows/ci.yml/badge.svg)](https://github.com/rust-lang/rustc_codegen_c/actions/workflows/ci.yml)
