@@ -1,3 +1,5 @@
+//! Test that the generated code has the filename and function name in it
+
 // CHECK: filename
 
 #![feature(no_core)]
