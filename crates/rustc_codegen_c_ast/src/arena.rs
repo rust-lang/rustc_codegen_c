@@ -1,8 +1,8 @@
 use crate::decl::CDeclKind;
 use crate::expr::CExprKind;
 use crate::func::CFuncKind;
-use crate::ty::CTyKind;
 use crate::stmt::CStmtKind;
+use crate::ty::CTyKind;
 
 rustc_arena::declare_arena!([
     [] decl: CDeclKind<'tcx>,
