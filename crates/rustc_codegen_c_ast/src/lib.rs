@@ -1,3 +1,10 @@
+//! This crate defines the subset of the C AST used by the C codegen backend.
+//!
+//! Its primary purpose is to facilitate the construction and pretty-printing of C code.
+//! Note that parsing is not included in this crate.
+//!
+//! It also provides utilities to assist with building the C AST and integrating
+//! with the `rustc_codegen_ssa` backend.
 #![feature(rustc_private)]
 
 use std::fmt::{self, Display};
