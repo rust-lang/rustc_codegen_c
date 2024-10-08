@@ -1,3 +1,5 @@
+/* Some helper macros for the generated code */
+
 /** cast from unsigned to signed
   * example: `__rust_utos(uint32_t, int32_t, x, INT32_MAX)`
   */
