@@ -14,9 +14,7 @@ impl Manifest {
     pub fn prepare(&self) {
         cprintln!("<b>[BUILD]</b> codegen backend");
         let mut command = Command::new("cargo");
-        command
-            .arg("build")
-            .args(["--manifest-path", "crates/Cargo.toml"]);
+        command.arg("build").args(["--manifest-path", "crates/Cargo.toml"]);
         if self.verbose {
             command.args(["-F", "debug"]);
         }
@@ -61,10 +59,7 @@ impl Manifest {
         command
             .args(["--edition", "2021"])
             .arg("-Z")
-            .arg(format!(
-                "codegen-backend={}",
-                self.codegen_backend().display()
-            ))
+            .arg(format!("codegen-backend={}", self.codegen_backend().display()))
             .args(["-C", "panic=abort"])
             .args(["-C", "lto=false"])
             .arg(format!("-Lall={}", self.out_dir.display()))

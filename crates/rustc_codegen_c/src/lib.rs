@@ -66,13 +66,8 @@ impl CodegenBackend for CCodegen {
         }
         .to_owned();
 
-        let ongoing_codegen = codegen_crate(
-            self.clone(),
-            tcx,
-            target_cpu,
-            metadata,
-            need_metadata_module,
-        );
+        let ongoing_codegen =
+            codegen_crate(self.clone(), tcx, target_cpu, metadata, need_metadata_module);
         Box::new(ongoing_codegen)
     }
 
@@ -82,10 +77,7 @@ impl CodegenBackend for CCodegen {
         sess: &Session,
         _outputs: &OutputFilenames,
     ) -> (CodegenResults, FxIndexMap<WorkProductId, WorkProduct>) {
-        ongoing_codegen
-            .downcast::<OngoingCodegen<Self>>()
-            .expect("expected CCodegen")
-            .join(sess)
+        ongoing_codegen.downcast::<OngoingCodegen<Self>>().expect("expected CCodegen").join(sess)
     }
 
     fn link(
@@ -94,12 +86,7 @@ impl CodegenBackend for CCodegen {
         codegen_results: CodegenResults,
         outputs: &OutputFilenames,
     ) -> Result<(), ErrorGuaranteed> {
-        link_binary(
-            sess,
-            &crate::archive::ArArchiveBuilderBuilder,
-            &codegen_results,
-            outputs,
-        )
+        link_binary(sess, &crate::archive::ArArchiveBuilderBuilder, &codegen_results, outputs)
     }
 }
 
