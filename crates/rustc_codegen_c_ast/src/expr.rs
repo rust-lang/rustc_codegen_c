@@ -2,10 +2,15 @@ use crate::pretty::{Printer, INDENT};
 use crate::ty::CTy;
 use crate::ModuleCtxt;
 
-/// Values of C variable, parameters and scalars
+/// Represents the values of C variables, parameters, and scalars.
+///
+/// There are two variants to distinguish between constants and variables,
+/// as is done in LLVM IR. We follow the `rustc_codegen_ssa` convention for this representation.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum CValue {
+    /// A constant scalar
     Scalar(i128),
+    /// A local variable indexed by a number, in the form `_0`, `_1`, etc.
     Local(usize),
 }
 
