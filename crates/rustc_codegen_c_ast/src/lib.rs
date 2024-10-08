@@ -14,7 +14,7 @@ pub mod func;
 pub mod module;
 pub mod pretty;
 pub mod stmt;
-pub mod r#type;
+pub mod ty;
 
 #[derive(Clone, Copy)]
 pub struct ModuleCtxt<'mx>(pub &'mx ModuleArena<'mx>);

@@ -4,7 +4,7 @@ use rustc_data_structures::intern::Interned;
 
 use crate::expr::CValue;
 use crate::pretty::Printer;
-use crate::r#type::CTy;
+use crate::ty::CTy;
 use crate::stmt::CStmt;
 use crate::ModuleCtxt;
 

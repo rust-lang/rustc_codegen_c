@@ -4,7 +4,7 @@ use std::ops::Deref;
 
 use rustc_abi::{HasDataLayout, TargetDataLayout};
 use rustc_codegen_c_ast::func::CFunc;
-use rustc_codegen_c_ast::r#type::CTy;
+use rustc_codegen_c_ast::ty::CTy;
 use rustc_codegen_ssa::traits::{BackendTypes, BuilderMethods, HasCodegen};
 use rustc_middle::ty::layout::{
     FnAbiError, FnAbiOfHelpers, FnAbiRequest, HasParamEnv, HasTyCtxt, LayoutError, LayoutOfHelpers,

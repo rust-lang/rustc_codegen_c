@@ -1,7 +1,7 @@
 use crate::decl::CDeclKind;
 use crate::expr::CExprKind;
 use crate::func::CFuncKind;
-use crate::r#type::CTyKind;
+use crate::ty::CTyKind;
 use crate::stmt::CStmtKind;
 
 rustc_arena::declare_arena!([

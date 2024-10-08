@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use rustc_abi::{HasDataLayout, TargetDataLayout};
 use rustc_codegen_c_ast::expr::CValue;
 use rustc_codegen_c_ast::func::CFunc;
-use rustc_codegen_c_ast::r#type::CTy;
+use rustc_codegen_c_ast::ty::CTy;
 use rustc_codegen_c_ast::ModuleCtxt;
 use rustc_codegen_ssa::traits::BackendTypes;
 use rustc_hash::FxHashMap;

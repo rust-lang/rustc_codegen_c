@@ -1,5 +1,5 @@
 use crate::pretty::{Printer, INDENT};
-use crate::r#type::CTy;
+use crate::ty::CTy;
 use crate::ModuleCtxt;
 
 /// Values of C variable, parameters and scalars

@@ -1,6 +1,6 @@
 use crate::expr::{CExpr, CValue};
 use crate::pretty::{Printer, INDENT};
-use crate::r#type::CTy;
+use crate::ty::CTy;
 use crate::ModuleCtxt;
 
 pub type CDecl<'mx> = &'mx CDeclKind<'mx>;
