@@ -93,8 +93,11 @@ impl TestCommand {
 }
 
 pub enum TestType {
+    /// Test an executable can be compiled
     Compile,
+    /// Test a library can be compiled
     CompileLib,
+    /// Run LLVM FileCheck on the generated code
     FileCheck,
 }
 
