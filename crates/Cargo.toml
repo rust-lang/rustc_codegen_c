@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["rustc_codegen_c"]
+members = ["rustc_codegen_c", "rustc_codegen_c_ast"]
 
 [workspace.package]
 version = "0.1.0"

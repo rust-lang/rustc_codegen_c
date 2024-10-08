@@ -1,6 +1,7 @@
 use clap::Args;
 
-use crate::{manifest::Manifest, Run};
+use crate::manifest::Manifest;
+use crate::Run;
 
 /// Clean the build directory
 #[derive(Args, Debug)]
