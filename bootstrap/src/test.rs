@@ -104,7 +104,8 @@ pub struct TestCase {
 
 impl TestCase {
     pub fn build(&self, manifest: &Manifest) {
-        std::fs::create_dir_all(self.output.parent().unwrap()).unwrap();
+        let output_dir = self.output.parent().unwrap();
+        std::fs::create_dir_all(output_dir).unwrap();
         let mut command = manifest.rustc();
         command
             .args(["--crate-type", "bin"])
@@ -117,14 +118,15 @@ impl TestCase {
     }
 
     pub fn build_lib(&self, manifest: &Manifest) {
-        std::fs::create_dir_all(self.output.parent().unwrap()).unwrap();
+        let output_dir = self.output.parent().unwrap();
+        std::fs::create_dir_all(output_dir).unwrap();
         let mut command = manifest.rustc();
         command
             .args(["--crate-type", "lib"])
             .arg("-O")
             .arg(&self.source)
-            .arg("--out-dir")
-            .arg(self.output.parent().unwrap());
+            .arg("--out-dir") // we use `--out-dir` to integrate with the default name convention
+            .arg(output_dir); // so here we ignore the filename and just use the directory
         log::debug!("running {:?}", command);
         command.status().unwrap();
     }
