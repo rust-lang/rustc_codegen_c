@@ -14,8 +14,8 @@ The project is at very early stage. Most of the code is not implemented yet.
 In the root directory of the project, run the following command:
 
 ```bash
-./y rustc example/example.rs
-./build/example
+./y rustc examples/basic_math.rs
+./build/basic_math
 ```
 
 The usage of `./y` can be viewed from `./y help`.

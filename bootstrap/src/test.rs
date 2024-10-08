@@ -58,7 +58,7 @@ impl TestCommand {
         let mut result = vec![];
 
         // Examples
-        for case in glob("example/*.rs").unwrap() {
+        for case in glob("examples/*.rs").unwrap() {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
             if filename == "mini_core" {
@@ -74,8 +74,8 @@ impl TestCommand {
                 );
                 continue;
             }
-            let name = format!("example/{}", filename.to_string_lossy());
-            let output = manifest.out_dir.join("example").join(filename);
+            let name = format!("examples/{}", filename.to_string_lossy());
+            let output = manifest.out_dir.join("examples").join(filename);
             result.push(TestCase { name, source: case, output, test: TestType::Compile })
         }
 
