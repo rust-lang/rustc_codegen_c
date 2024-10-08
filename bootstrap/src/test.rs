@@ -7,7 +7,8 @@ use color_print::{cprint, cprintln};
 use glob::glob;
 use which::which;
 
-use crate::{manifest::Manifest, Run};
+use crate::manifest::Manifest;
+use crate::Run;
 
 /// Run tests
 #[derive(Args, Debug)]
@@ -55,12 +56,7 @@ impl TestCommand {
             }
             let name = format!("example/{}", filename.to_string_lossy());
             let output = manifest.out_dir.join("example").join(filename);
-            result.push(TestCase {
-                name,
-                source: case,
-                output,
-                test: TestType::Compile,
-            })
+            result.push(TestCase { name, source: case, output, test: TestType::Compile })
         }
 
         // Codegen tests
@@ -69,12 +65,7 @@ impl TestCommand {
             let filename = case.file_stem().unwrap();
             let name = format!("codegen/{}", filename.to_string_lossy());
             let output = manifest.out_dir.join("tests/codegen").join(filename);
-            result.push(TestCase {
-                name,
-                source: case,
-                output,
-                test: TestType::FileCheck,
-            })
+            result.push(TestCase { name, source: case, output, test: TestType::FileCheck })
         }
 
         result
@@ -140,10 +131,7 @@ impl FileChecker {
                 filename.ends_with(".c") && filename.starts_with(case.as_ref())
             });
 
-        assert!(
-            generated.is_some(),
-            "could not find {case}'s generated file"
-        );
+        assert!(generated.is_some(), "could not find {case}'s generated file");
         let generated = generated.unwrap();
 
         let generated = File::open(generated.path()).unwrap();

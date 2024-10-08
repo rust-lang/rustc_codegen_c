@@ -15,9 +15,7 @@ pub struct FmtCommand {
 impl Run for FmtCommand {
     fn run(&self, _manifest: &crate::manifest::Manifest) {
         self.perform(
-            Command::new("cargo")
-                .arg("fmt")
-                .args(["--manifest-path", "bootstrap/Cargo.toml"]),
+            Command::new("cargo").arg("fmt").args(["--manifest-path", "bootstrap/Cargo.toml"]),
         );
         self.perform(
             Command::new("cargo")
@@ -26,18 +24,10 @@ impl Run for FmtCommand {
                 .arg("--all"),
         );
         for file in glob("example/**/*.rs").unwrap() {
-            self.perform(
-                Command::new("rustfmt")
-                    .args(["--edition", "2021"])
-                    .arg(file.unwrap()),
-            );
+            self.perform(Command::new("rustfmt").args(["--edition", "2021"]).arg(file.unwrap()));
         }
         for file in glob("tests/**/*.rs").unwrap() {
-            self.perform(
-                Command::new("rustfmt")
-                    .args(["--edition", "2021"])
-                    .arg(file.unwrap()),
-            );
+            self.perform(Command::new("rustfmt").args(["--edition", "2021"]).arg(file.unwrap()));
         }
     }
 }
@@ -48,10 +38,6 @@ impl FmtCommand {
             command.arg("--check");
         }
         log::debug!("running {:?}", command);
-        assert!(
-            command.status().unwrap().success(),
-            "failed to run {:?}",
-            command
-        );
+        assert!(command.status().unwrap().success(), "failed to run {:?}", command);
     }
 }
