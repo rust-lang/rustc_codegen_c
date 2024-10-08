@@ -23,7 +23,7 @@ impl Run for FmtCommand {
                 .args(["--manifest-path", "crates/Cargo.toml"])
                 .arg("--all"),
         );
-        for file in glob("example/**/*.rs").unwrap() {
+        for file in glob("examples/**/*.rs").unwrap() {
             self.perform(Command::new("rustfmt").args(["--edition", "2021"]).arg(file.unwrap()));
         }
         for file in glob("tests/**/*.rs").unwrap() {
