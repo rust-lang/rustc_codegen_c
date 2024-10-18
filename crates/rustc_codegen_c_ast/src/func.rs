@@ -5,7 +5,7 @@ use rustc_data_structures::intern::Interned;
 use crate::expr::CValue;
 use crate::pretty::{Print, PrinterCtx};
 use crate::stmt::{print_compound, CStmt};
-use crate::ty::CTy;
+use crate::ty::{print_declarator, CTy};
 use crate::ModuleCtxt;
 
 pub type CFunc<'mx> = Interned<'mx, CFuncKind<'mx>>;
@@ -14,7 +14,7 @@ pub type CFunc<'mx> = Interned<'mx, CFuncKind<'mx>>;
 pub struct CFuncKind<'mx> {
     pub name: &'mx str,
     pub ty: CTy<'mx>,
-    pub params: Vec<(CTy<'mx>, CValue)>,
+    pub params: Vec<(CTy<'mx>, CValue<'mx>)>,
     pub body: RefCell<Vec<CStmt<'mx>>>,
     local_var_counter: Cell<usize>,
 }
@@ -65,16 +65,12 @@ pub(crate) fn print_func_decl(func: CFunc, ctx: &mut PrinterCtx) {
 
 fn print_signature(func: CFunc, ctx: &mut PrinterCtx) {
     ctx.ibox(0, |ctx| {
-        func.0.ty.print_to(ctx);
-        ctx.softbreak();
-        ctx.word(func.0.name.to_string());
+        print_declarator(func.0.ty, Some(CValue::Func(func.0.name)), ctx);
 
         ctx.valign_delim(("(", ")"), |ctx| {
             ctx.seperated(",", &func.0.params, |ctx, (ty, name)| {
                 ctx.ibox(0, |ctx| {
-                    ty.print_to(ctx);
-                    ctx.softbreak();
-                    name.print_to(ctx);
+                    print_declarator(*ty, Some(*name), ctx);
                 })
             })
         });

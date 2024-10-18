@@ -1,6 +1,7 @@
 use rustc_data_structures::intern::Interned;
 use rustc_type_ir::{IntTy, UintTy};
 
+use crate::expr::CValue;
 use crate::pretty::{Print, PrinterCtx};
 use crate::ModuleCtxt;
 
@@ -116,22 +117,51 @@ impl<'mx> ModuleCtxt<'mx> {
     }
 }
 
-impl Print for CTy<'_> {
-    fn print_to(&self, ctx: &mut PrinterCtx) {
-        match self {
-            CTy::Primitive(ty) => ctx.word(ty.to_str()),
-            CTy::Ref(ty) => ty.0.print_to(ctx),
-        }
+/// Print a C declarator.
+///
+/// A declarator is a type with an optional identifier and pointer indirections,
+/// e.g. `int *x`.
+///
+/// When `val` is `None`, this prints an abstract declarator, or in other words,
+/// a standalone type without an identifier.
+pub(crate) fn print_declarator(mut ty: CTy, val: Option<CValue>, ctx: &mut PrinterCtx) {
+    enum DeclaratorPart<'mx> {
+        Ident(Option<CValue<'mx>>),
+        Ptr,
     }
-}
 
-impl Print for CTyKind<'_> {
-    fn print_to(&self, ctx: &mut PrinterCtx) {
-        match self {
-            CTyKind::Pointer(ty) => {
-                ctx.word("*");
-                ty.print_to(ctx);
+    impl Print for DeclaratorPart<'_> {
+        fn print_to(&self, ctx: &mut PrinterCtx) {
+            match self {
+                DeclaratorPart::Ident(val) => {
+                    if let &Some(val) = val {
+                        val.print_to(ctx);
+                    }
+                }
+                DeclaratorPart::Ptr => {
+                    ctx.word("*");
+                }
             }
         }
+    }
+
+    let mut decl_parts = std::collections::VecDeque::new();
+    decl_parts.push_front(DeclaratorPart::Ident(val));
+    while let CTy::Ref(kind) = ty {
+        match kind.0 {
+            CTyKind::Pointer(_) => decl_parts.push_front(DeclaratorPart::Ptr),
+        }
+        ty = match kind.0 {
+            CTyKind::Pointer(ty) => *ty,
+        };
+    }
+
+    let CTy::Primitive(base) = ty else { unreachable!() };
+    ctx.word(base.to_str());
+    if val.is_some() {
+        ctx.nbsp();
+    }
+    for part in decl_parts {
+        part.print_to(ctx);
     }
 }

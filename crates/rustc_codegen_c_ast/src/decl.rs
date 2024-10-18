@@ -1,6 +1,6 @@
 use crate::expr::{CExpr, CValue};
 use crate::pretty::{Print, PrinterCtx, INDENT};
-use crate::ty::CTy;
+use crate::ty::{print_declarator, CTy};
 use crate::ModuleCtxt;
 
 pub type CDecl<'mx> = &'mx CDeclKind<'mx>;
@@ -11,7 +11,7 @@ pub enum CDeclKind<'mx> {
     // Record { name: String, fields: Vec<CDecl> },
     // Field { name: String, ty: CType },
     // Enum { name: String, values: Vec<CEnumConstant> },
-    Var { name: CValue, ty: CTy<'mx>, init: Option<CExpr<'mx>> },
+    Var { name: CValue<'mx>, ty: CTy<'mx>, init: Option<CExpr<'mx>> },
 }
 
 impl<'mx> ModuleCtxt<'mx> {
@@ -19,7 +19,7 @@ impl<'mx> ModuleCtxt<'mx> {
         self.arena().alloc(decl)
     }
 
-    pub fn var(self, name: CValue, ty: CTy<'mx>, init: Option<CExpr<'mx>>) -> CDecl<'mx> {
+    pub fn var(self, name: CValue<'mx>, ty: CTy<'mx>, init: Option<CExpr<'mx>>) -> CDecl<'mx> {
         self.decl(CDeclKind::Var { name, ty, init })
     }
 }
@@ -29,9 +29,7 @@ impl Print for CDecl<'_> {
         match self {
             CDeclKind::Var { name, ty, init } => {
                 ctx.ibox(INDENT, |ctx| {
-                    ty.print_to(ctx);
-                    ctx.nbsp();
-                    name.print_to(ctx);
+                    print_declarator(*ty, Some(*name), ctx);
                     if let Some(init) = init {
                         ctx.word(" =");
                         ctx.softbreak();
