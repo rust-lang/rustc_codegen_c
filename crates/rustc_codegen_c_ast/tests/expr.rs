@@ -4,8 +4,8 @@ use blessed_test::*;
 use rustc_codegen_c_ast::expr::CValue;
 use rustc_type_ir::IntTy;
 
-extern crate rustc_type_ir;
 extern crate rustc_driver;
+extern crate rustc_type_ir;
 mod blessed_test;
 
 #[test]
