@@ -1,0 +1,10 @@
+[package]
+name = "rustc_codegen_c_ast"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+
+# This package uses rustc crates.
+[package.metadata.rust-analyzer]
+rustc_private = true
