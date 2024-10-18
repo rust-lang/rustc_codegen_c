@@ -22,6 +22,12 @@ impl Run for TestCommand {
             cprintln!("<r,s>Test failed</r,s>: {}", info);
         }));
 
+        cprintln!("<b>[TEST]</b> running cargo test");
+        let mut command = std::process::Command::new("cargo");
+        command.args(["test", "--manifest-path", "crates/Cargo.toml"]);
+        log::debug!("running {:?}", command);
+        assert!(command.status().unwrap().success(), "failed to run {:?}", command);
+
         let testcases = self.collect_testcases(manifest);
         cprintln!("<b>[TEST]</b> found {} testcases", testcases.len());
 

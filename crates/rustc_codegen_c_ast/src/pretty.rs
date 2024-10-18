@@ -131,6 +131,7 @@ impl PrinterCtx {
     }
 }
 
-pub(crate) trait Print {
+/// Trait for a type that can be pretty printed.
+pub trait Print {
     fn print_to(&self, ctx: &mut PrinterCtx);
 }

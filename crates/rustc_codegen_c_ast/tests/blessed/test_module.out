@@ -1,0 +1,13 @@
+#include <stdio.h>
+
+// blessed test
+
+int32_t _42;
+int32_t foo(int32_t _0);
+
+int32_t foo(int32_t _0)
+{
+  int32_t _1;
+  (_1 = 1);
+  return _1;
+}
