@@ -1,24 +1,34 @@
+//! This module defines the AST nodes for C statements.
+
 use crate::decl::CDecl;
 use crate::expr::CExpr;
 use crate::pretty::{Print, PrinterCtx, INDENT};
-use crate::ModuleCtxt;
+use crate::ModuleCtx;
 
+/// C statement.
 pub type CStmt<'mx> = &'mx CStmtKind<'mx>;
 
+/// C statement.
 #[derive(Debug, Clone)]
 pub enum CStmtKind<'mx> {
+    /// Compound statement, which is a sequence of statements enclosed in braces.
     Compound(Vec<CStmt<'mx>>),
     // If { cond: CExpr<'mx>, then_br: CStmt<'mx>, else_br: Option<CStmt<'mx>> },
+    /// Return statement.
     Return(Option<CExpr<'mx>>),
+    /// Declaration statement, e.g. `int x = 42;`.
     Decl(CDecl<'mx>),
+    /// Expression statement, e.g. `foo(x + 1);`.
     Expr(CExpr<'mx>),
 }
 
-impl<'mx> ModuleCtxt<'mx> {
+impl<'mx> ModuleCtx<'mx> {
+    /// Create a new statement.
     pub fn stmt(self, stmt: CStmtKind<'mx>) -> CStmt<'mx> {
         self.arena().alloc(stmt)
     }
 
+    /// Create a compound statement.
     pub fn compound(self, stmts: Vec<CStmt<'mx>>) -> CStmt<'mx> {
         self.stmt(CStmtKind::Compound(stmts))
     }
@@ -32,14 +42,17 @@ impl<'mx> ModuleCtxt<'mx> {
     //     self.stmt(CStmtKind::If { cond, then_br, else_br })
     // }
 
+    /// Create a return statement.
     pub fn ret(self, expr: Option<CExpr<'mx>>) -> CStmt<'mx> {
         self.stmt(CStmtKind::Return(expr))
     }
 
+    /// Create a declaration statement.
     pub fn decl_stmt(self, decl: CDecl<'mx>) -> CStmt<'mx> {
         self.stmt(CStmtKind::Decl(decl))
     }
 
+    /// Create an expression statement.
     pub fn expr_stmt(self, expr: CExpr<'mx>) -> CStmt<'mx> {
         self.stmt(CStmtKind::Expr(expr))
     }
@@ -68,6 +81,7 @@ impl Print for CStmt<'_> {
     }
 }
 
+/// Print a compound statement.
 pub(crate) fn print_compound(stmts: &[CStmt], ctx: &mut PrinterCtx) {
     ctx.cbox_delim(INDENT, ("{", "}"), 1, |ctx| {
         if let Some((first, rest)) = stmts.split_first() {

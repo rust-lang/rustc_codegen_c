@@ -25,24 +25,28 @@ pub mod pretty;
 pub mod stmt;
 pub mod ty;
 
+/// A context containing a C file's AST nodes which are under construction.
 #[derive(Clone, Copy)]
-pub struct ModuleCtxt<'mx>(pub &'mx ModuleArena<'mx>);
+pub struct ModuleCtx<'mx>(pub &'mx ModuleArena<'mx>);
 
-impl<'mx> ModuleCtxt<'mx> {
+impl<'mx> ModuleCtx<'mx> {
+    /// Get the memory arena for the context.
     pub fn arena(&self) -> &'mx arena::Arena<'mx> {
         &self.0.arena
     }
 
+    /// Get the AST node for the module.
     pub fn module(&self) -> &'mx module::Module<'mx> {
         &self.0.module
     }
 
+    /// Allocate a string in the arena.
     pub fn alloc_str(&self, s: &str) -> &'mx str {
         self.arena().alloc_str(s)
     }
 }
 
-impl<'mx> Display for ModuleCtxt<'mx> {
+impl<'mx> Display for ModuleCtx<'mx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut printer = pretty::PrinterCtx::new();
         self.module().print_to(&mut printer);
@@ -51,7 +55,9 @@ impl<'mx> Display for ModuleCtxt<'mx> {
 }
 
 pub struct ModuleArena<'mx> {
+    /// The memory arena for the module.
     pub arena: arena::Arena<'mx>,
+    /// The module's AST node.
     pub module: module::Module<'mx>,
 }
 

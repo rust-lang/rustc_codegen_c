@@ -1,6 +1,8 @@
+//! This module defines the AST nodes for C expressions.
+
 use crate::pretty::{Print, PrinterCtx, INDENT};
 use crate::ty::{print_declarator, CTy};
-use crate::ModuleCtxt;
+use crate::ModuleCtx;
 
 /// Represents the values of C variables, parameters, and scalars.
 ///
@@ -16,43 +18,63 @@ pub enum CValue<'mx> {
     Func(&'mx str),
 }
 
+/// C expressions.
 pub type CExpr<'mx> = &'mx CExprKind<'mx>;
 
+/// C expressions.
 #[derive(Debug, Clone)]
 pub enum CExprKind<'mx> {
+    /// A "raw" C expression, simply a string of C code, which is printed as-is.
     Raw(&'static str),
+    /// A value, such as a constant, variable, or function name.
     Value(CValue<'mx>),
+    /// A binary operation expression, e.g. `lhs + rhs`.
     Binary { lhs: CExpr<'mx>, rhs: CExpr<'mx>, op: &'static str },
+    /// A type cast expression, e.g. `(int) x`.
     Cast { ty: CTy<'mx>, expr: CExpr<'mx> },
+    /// A function call expression, e.g. `foo(x, y)`.
     Call { callee: CExpr<'mx>, args: Vec<CExpr<'mx>> },
-    Member { expr: CExpr<'mx>, arrow: bool, field: &'mx str },
+    /// A member access expression, e.g. `foo.bar` or `foo->bar`.
+    Member {
+        expr: CExpr<'mx>,
+        /// Whether to use the `->` operator instead of `.`.
+        arrow: bool,
+        field: &'mx str,
+    },
 }
 
-impl<'mx> ModuleCtxt<'mx> {
+impl<'mx> ModuleCtx<'mx> {
+    /// Create a new expression.
     pub fn expr(&self, expr: CExprKind<'mx>) -> CExpr<'mx> {
         self.arena().alloc(expr)
     }
 
+    /// Create a new raw expression.
     pub fn raw(&self, raw: &'static str) -> CExpr<'mx> {
         self.expr(CExprKind::Raw(raw))
     }
 
+    /// Create a new value expression.
     pub fn value(&self, value: CValue<'mx>) -> CExpr<'mx> {
         self.expr(CExprKind::Value(value))
     }
 
+    /// Create a new binary expression.
     pub fn binary(&self, lhs: CExpr<'mx>, rhs: CExpr<'mx>, op: &'static str) -> CExpr<'mx> {
         self.expr(CExprKind::Binary { lhs, rhs, op })
     }
 
+    /// Create a new cast expression.
     pub fn cast(&self, ty: CTy<'mx>, expr: CExpr<'mx>) -> CExpr<'mx> {
         self.expr(CExprKind::Cast { ty, expr })
     }
 
+    /// Create a new function call expression.
     pub fn call(&self, callee: CExpr<'mx>, args: Vec<CExpr<'mx>>) -> CExpr<'mx> {
         self.expr(CExprKind::Call { callee, args })
     }
 
+    /// Create a new member access expression.
     pub fn member(&self, expr: CExpr<'mx>, field: &'mx str) -> CExpr<'mx> {
         self.expr(CExprKind::Member { expr, field, arrow: false })
     }

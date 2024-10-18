@@ -1,4 +1,4 @@
-//! Pretty printing
+//! Pretty printing support for C AST nodes.
 
 // TODO: pretty printing test
 
@@ -6,9 +6,10 @@ use std::borrow::Cow;
 
 use rustc_ast_pretty::pp;
 
+/// Default indentation size.
 pub const INDENT: isize = 2;
 
-/// Pretty printer
+/// Pretty printer, see [`rustc_ast_pretty::pp::Printer`] for details.
 pub struct PrinterCtx {
     pp: pp::Printer,
 }

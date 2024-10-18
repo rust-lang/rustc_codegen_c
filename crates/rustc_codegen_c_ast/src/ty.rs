@@ -1,14 +1,18 @@
+//! This module defines the AST nodes for C types.
+
 use rustc_data_structures::intern::Interned;
 use rustc_type_ir::{IntTy, UintTy};
 
 use crate::expr::CValue;
 use crate::pretty::{Print, PrinterCtx};
-use crate::ModuleCtxt;
+use crate::ModuleCtx;
 
 /// C types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CTy<'mx> {
+    /// A primitive C type.
     Primitive(CPTy),
+    /// A non-primitive C type, e.g. a pointer type.
     Ref(Interned<'mx, CTyKind<'mx>>),
 }
 
@@ -52,6 +56,7 @@ impl CPTy {
         }
     }
 
+    /// Get the corresponding C type name.
     pub fn to_str(self) -> &'static str {
         match self {
             CPTy::Isize => "size_t",
@@ -84,14 +89,16 @@ impl CPTy {
     }
 }
 
+/// Complex C types.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CTyKind<'mx> {
+    /// A pointer type.
     Pointer(CTy<'mx>),
     // Record(String),
     // Array(CType<'mx>, usize),
 }
 
-impl<'mx> ModuleCtxt<'mx> {
+impl<'mx> ModuleCtx<'mx> {
     /// Get the type of an signed integer
     pub fn get_int_type(&self, int: IntTy) -> CTy<'mx> {
         match int {
@@ -121,6 +128,9 @@ impl<'mx> ModuleCtxt<'mx> {
 ///
 /// A declarator is a type with an optional identifier and pointer indirections,
 /// e.g. `int *x`.
+///
+/// This function is necessary because the C declarator syntax is quite complex
+/// when the type becomes more complex, e.g. `int (*x)[10]`.
 ///
 /// When `val` is `None`, this prints an abstract declarator, or in other words,
 /// a standalone type without an identifier.

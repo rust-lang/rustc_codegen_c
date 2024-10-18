@@ -1,3 +1,5 @@
+//! This module defines AST nodes for C functions.
+
 use std::cell::{Cell, RefCell};
 
 use rustc_data_structures::intern::Interned;
@@ -6,20 +8,28 @@ use crate::expr::CValue;
 use crate::pretty::{Print, PrinterCtx};
 use crate::stmt::{print_compound, CStmt};
 use crate::ty::{print_declarator, CTy};
-use crate::ModuleCtxt;
+use crate::ModuleCtx;
 
+/// C functions definition.
 pub type CFunc<'mx> = Interned<'mx, CFuncKind<'mx>>;
 
+/// C function definition.
 #[derive(Debug, Clone)]
 pub struct CFuncKind<'mx> {
+    /// Function name.
     pub name: &'mx str,
+    /// Return type.
     pub ty: CTy<'mx>,
+    /// Function parameters.
     pub params: Vec<(CTy<'mx>, CValue<'mx>)>,
+    /// Function body.
     pub body: RefCell<Vec<CStmt<'mx>>>,
+    /// A counter for local variables, for generating unique names.
     local_var_counter: Cell<usize>,
 }
 
 impl<'mx> CFuncKind<'mx> {
+    /// Make a new function definition.
     pub fn new(name: &'mx str, ty: CTy<'mx>, params: impl IntoIterator<Item = CTy<'mx>>) -> Self {
         let params = params
             .into_iter()
@@ -31,10 +41,12 @@ impl<'mx> CFuncKind<'mx> {
         Self { name, ty, params, body: RefCell::new(Vec::new()), local_var_counter }
     }
 
+    /// Push a statement to the end of the function body.
     pub fn push_stmt(&self, stmt: CStmt<'mx>) {
         self.body.borrow_mut().push(stmt);
     }
 
+    /// Get a new unique local variable.
     pub fn next_local_var(&self) -> CValue {
         let val = CValue::Local(self.local_var_counter.get());
         self.local_var_counter.set(self.local_var_counter.get() + 1);
@@ -42,7 +54,8 @@ impl<'mx> CFuncKind<'mx> {
     }
 }
 
-impl<'mx> ModuleCtxt<'mx> {
+impl<'mx> ModuleCtx<'mx> {
+    /// Create a new function definition.
     pub fn func(&self, func: CFuncKind<'mx>) -> &'mx CFuncKind<'mx> {
         self.arena().alloc(func)
     }
