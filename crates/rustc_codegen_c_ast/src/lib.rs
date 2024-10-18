@@ -9,6 +9,8 @@
 
 use std::fmt::{self, Display};
 
+use crate::pretty::Print;
+
 extern crate rustc_arena;
 extern crate rustc_ast_pretty;
 extern crate rustc_data_structures;
@@ -42,8 +44,8 @@ impl<'mx> ModuleCtxt<'mx> {
 
 impl<'mx> Display for ModuleCtxt<'mx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut printer = pretty::Printer::new();
-        printer.print_module(self.module());
+        let mut printer = pretty::PrinterCtx::new();
+        self.module().print_to(&mut printer);
         write!(f, "{}", printer.finish())
     }
 }

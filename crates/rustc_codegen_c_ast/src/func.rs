@@ -3,8 +3,8 @@ use std::cell::{Cell, RefCell};
 use rustc_data_structures::intern::Interned;
 
 use crate::expr::CValue;
-use crate::pretty::Printer;
-use crate::stmt::CStmt;
+use crate::pretty::{Print, PrinterCtx};
+use crate::stmt::{print_compound, CStmt};
 use crate::ty::CTy;
 use crate::ModuleCtxt;
 
@@ -48,35 +48,35 @@ impl<'mx> ModuleCtxt<'mx> {
     }
 }
 
-impl Printer {
-    pub fn print_func_decl(&mut self, func: CFunc) {
-        self.print_signature(func);
-        self.word(";");
-    }
-
-    pub fn print_func(&mut self, func: CFunc) {
-        self.ibox(0, |this| {
-            this.print_signature(func);
-            this.softbreak(); // I don't know how to avoid a newline here
-            this.print_compound(&func.0.body.borrow());
+impl Print for CFunc<'_> {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        ctx.ibox(0, |ctx| {
+            print_signature(*self, ctx);
+            ctx.softbreak(); // I don't know how to avoid a newline here
+            print_compound(&self.0.body.borrow(), ctx);
         })
     }
+}
 
-    fn print_signature(&mut self, func: CFunc) {
-        self.ibox(0, |this| {
-            this.print_ty(func.0.ty);
-            this.softbreak();
-            this.word(func.0.name.to_string());
+pub(crate) fn print_func_decl(func: CFunc, ctx: &mut PrinterCtx) {
+    print_signature(func, ctx);
+    ctx.word(";");
+}
 
-            this.valign_delim(("(", ")"), |this| {
-                this.seperated(",", &func.0.params, |this, (ty, name)| {
-                    this.ibox(0, |this| {
-                        this.print_ty(*ty);
-                        this.softbreak();
-                        this.print_value(*name);
-                    })
+fn print_signature(func: CFunc, ctx: &mut PrinterCtx) {
+    ctx.ibox(0, |ctx| {
+        func.0.ty.print_to(ctx);
+        ctx.softbreak();
+        ctx.word(func.0.name.to_string());
+
+        ctx.valign_delim(("(", ")"), |ctx| {
+            ctx.seperated(",", &func.0.params, |ctx, (ty, name)| {
+                ctx.ibox(0, |ctx| {
+                    ty.print_to(ctx);
+                    ctx.softbreak();
+                    name.print_to(ctx);
                 })
-            });
+            })
         });
-    }
+    });
 }

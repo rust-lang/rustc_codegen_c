@@ -1,5 +1,5 @@
 use crate::expr::{CExpr, CValue};
-use crate::pretty::{Printer, INDENT};
+use crate::pretty::{Print, PrinterCtx, INDENT};
 use crate::ty::CTy;
 use crate::ModuleCtxt;
 
@@ -24,20 +24,20 @@ impl<'mx> ModuleCtxt<'mx> {
     }
 }
 
-impl Printer {
-    pub fn print_decl(&mut self, decl: CDecl) {
-        match decl {
+impl Print for CDecl<'_> {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        match self {
             CDeclKind::Var { name, ty, init } => {
-                self.ibox(INDENT, |this| {
-                    this.print_ty(*ty);
-                    this.nbsp();
-                    this.print_value(*name);
+                ctx.ibox(INDENT, |ctx| {
+                    ty.print_to(ctx);
+                    ctx.nbsp();
+                    name.print_to(ctx);
                     if let Some(init) = init {
-                        this.word(" =");
-                        this.softbreak();
-                        this.print_expr(init);
+                        ctx.word(" =");
+                        ctx.softbreak();
+                        init.print_to(ctx);
                     }
-                    this.word(";");
+                    ctx.word(";");
                 });
             }
         }

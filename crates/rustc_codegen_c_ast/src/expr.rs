@@ -1,4 +1,4 @@
-use crate::pretty::{Printer, INDENT};
+use crate::pretty::{Print, PrinterCtx, INDENT};
 use crate::ty::CTy;
 use crate::ModuleCtxt;
 
@@ -56,50 +56,52 @@ impl<'mx> ModuleCtxt<'mx> {
     }
 }
 
-impl Printer {
-    pub fn print_value(&mut self, value: CValue) {
-        match value {
-            CValue::Scalar(i) => self.word(i.to_string()),
-            CValue::Local(i) => self.word(format!("_{}", i)),
+impl Print for CValue {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        match self {
+            CValue::Scalar(i) => ctx.word(i.to_string()),
+            CValue::Local(i) => ctx.word(format!("_{}", i)),
         }
     }
+}
 
-    pub fn print_expr(&mut self, expr: CExpr) {
-        match expr {
-            CExprKind::Raw(raw) => self.word(*raw),
-            CExprKind::Value(value) => self.print_value(*value),
-            CExprKind::Binary { lhs, rhs, op } => self.ibox_delim(INDENT, ("(", ")"), 0, |this| {
-                this.ibox(-INDENT, |this| this.print_expr(lhs));
+impl Print for CExpr<'_> {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        match self {
+            CExprKind::Raw(raw) => ctx.word(*raw),
+            CExprKind::Value(value) => value.print_to(ctx),
+            CExprKind::Binary { lhs, rhs, op } => ctx.ibox_delim(INDENT, ("(", ")"), 0, |ctx| {
+                ctx.ibox(-INDENT, |ctx| lhs.print_to(ctx));
 
-                this.softbreak();
-                this.word(*op);
-                this.nbsp();
+                ctx.softbreak();
+                ctx.word(*op);
+                ctx.nbsp();
 
-                this.print_expr(rhs);
+                rhs.print_to(ctx);
             }),
-            CExprKind::Cast { ty, expr } => self.ibox(INDENT, |this| {
-                this.word("(");
-                this.print_ty(*ty);
-                this.word(")");
+            CExprKind::Cast { ty, expr } => ctx.ibox(INDENT, |ctx| {
+                ctx.word("(");
+                ty.print_to(ctx);
+                ctx.word(")");
 
-                this.nbsp();
-                this.print_expr(expr);
+                ctx.nbsp();
+                expr.print_to(ctx);
             }),
-            CExprKind::Call { callee, args } => self.ibox(INDENT, |this| {
-                this.print_expr(callee);
-                this.cbox_delim(INDENT, ("(", ")"), 0, |this| {
-                    this.seperated(",", args, |this, arg| this.print_expr(arg))
+            CExprKind::Call { callee, args } => ctx.ibox(INDENT, |ctx| {
+                callee.print_to(ctx);
+                ctx.cbox_delim(INDENT, ("(", ")"), 0, |ctx| {
+                    ctx.seperated(",", args, |ctx, arg| arg.print_to(ctx));
                 });
             }),
-            CExprKind::Member { expr, arrow, field } => self.cbox(INDENT, |this| {
-                this.print_expr(expr);
-                this.zerobreak();
+            CExprKind::Member { expr, arrow, field } => ctx.cbox(INDENT, |ctx| {
+                expr.print_to(ctx);
+                ctx.zerobreak();
                 if *arrow {
-                    this.word("->");
+                    ctx.word("->");
                 } else {
-                    this.word(".");
+                    ctx.word(".");
                 }
-                this.word(field.to_string());
+                ctx.word(field.to_string());
             }),
         }
     }

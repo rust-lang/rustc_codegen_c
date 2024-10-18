@@ -1,7 +1,7 @@
 use rustc_data_structures::intern::Interned;
 use rustc_type_ir::{IntTy, UintTy};
 
-use crate::pretty::Printer;
+use crate::pretty::{Print, PrinterCtx};
 use crate::ModuleCtxt;
 
 /// C types.
@@ -116,19 +116,21 @@ impl<'mx> ModuleCtxt<'mx> {
     }
 }
 
-impl Printer {
-    pub fn print_ty(&mut self, ty: CTy<'_>) {
-        match ty {
-            CTy::Primitive(ty) => self.word(ty.to_str()),
-            CTy::Ref(ty) => self.print_ty_kind(ty.0),
+impl Print for CTy<'_> {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        match self {
+            CTy::Primitive(ty) => ctx.word(ty.to_str()),
+            CTy::Ref(ty) => ty.0.print_to(ctx),
         }
     }
+}
 
-    fn print_ty_kind(&mut self, ty: &CTyKind<'_>) {
-        match ty {
+impl Print for CTyKind<'_> {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        match self {
             CTyKind::Pointer(ty) => {
-                self.word("*");
-                self.print_ty(*ty);
+                ctx.word("*");
+                ty.print_to(ctx);
             }
         }
     }

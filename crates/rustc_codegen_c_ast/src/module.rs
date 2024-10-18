@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 
 use crate::decl::CDecl;
-use crate::func::CFunc;
-use crate::pretty::Printer;
+use crate::func::{print_func_decl, CFunc};
+use crate::pretty::{Print, PrinterCtx};
 
 #[derive(Debug, Clone)]
 pub struct Module<'mx> {
@@ -35,38 +35,38 @@ impl<'mx> Module<'mx> {
     }
 }
 
-impl Printer {
-    pub fn print_module(&mut self, module: &Module) {
-        self.cbox(0, |this| {
-            for &include in module.includes.borrow().iter() {
-                this.word("#include <");
-                this.word(include);
-                this.word(">");
-                this.hardbreak();
+impl Print for Module<'_> {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        ctx.cbox(0, |ctx| {
+            for &include in self.includes.borrow().iter() {
+                ctx.word("#include <");
+                ctx.word(include);
+                ctx.word(">");
+                ctx.hardbreak();
             }
 
-            this.hardbreak();
+            ctx.hardbreak();
 
-            this.word(module.helper);
+            ctx.word(self.helper);
 
-            for &decl in module.decls.borrow().iter() {
-                this.hardbreak();
-                this.hardbreak();
-                this.print_decl(decl);
+            for &decl in self.decls.borrow().iter() {
+                ctx.hardbreak();
+                ctx.hardbreak();
+                decl.print_to(ctx);
             }
 
-            for &func in module.funcs.borrow().iter() {
-                this.hardbreak();
-                this.print_func_decl(func);
+            for &func in self.funcs.borrow().iter() {
+                ctx.hardbreak();
+                print_func_decl(func, ctx);
             }
 
-            for &func in module.funcs.borrow().iter() {
-                this.hardbreak();
-                this.hardbreak();
-                this.print_func(func);
+            for &func in self.funcs.borrow().iter() {
+                ctx.hardbreak();
+                ctx.hardbreak();
+                func.print_to(ctx);
             }
 
-            this.hardbreak();
+            ctx.hardbreak();
         });
     }
 }

@@ -1,6 +1,6 @@
 use crate::decl::CDecl;
 use crate::expr::CExpr;
-use crate::pretty::{Printer, INDENT};
+use crate::pretty::{Print, PrinterCtx, INDENT};
 use crate::ModuleCtxt;
 
 pub type CStmt<'mx> = &'mx CStmtKind<'mx>;
@@ -45,37 +45,37 @@ impl<'mx> ModuleCtxt<'mx> {
     }
 }
 
-impl Printer {
-    pub fn print_stmt(&mut self, stmt: CStmt) {
-        match stmt {
-            CStmtKind::Compound(stmts) => self.print_compound(stmts),
+impl Print for CStmt<'_> {
+    fn print_to(&self, ctx: &mut PrinterCtx) {
+        match self {
+            CStmtKind::Compound(stmts) => print_compound(stmts, ctx),
             CStmtKind::Return(ret) => {
-                self.ibox(INDENT, |this| {
-                    this.word("return");
+                ctx.ibox(INDENT, |ctx| {
+                    ctx.word("return");
                     if let Some(ret) = ret {
-                        this.softbreak();
-                        this.print_expr(ret);
+                        ctx.softbreak();
+                        ret.print_to(ctx);
                     }
-                    this.word(";");
+                    ctx.word(";");
                 });
             }
-            CStmtKind::Decl(decl) => self.print_decl(decl),
+            CStmtKind::Decl(decl) => decl.print_to(ctx),
             CStmtKind::Expr(expr) => {
-                self.print_expr(expr);
-                self.word(";");
+                expr.print_to(ctx);
+                ctx.word(";");
             }
         }
     }
+}
 
-    pub(crate) fn print_compound(&mut self, stmts: &[CStmt]) {
-        self.cbox_delim(INDENT, ("{", "}"), 1, |this| {
-            if let Some((first, rest)) = stmts.split_first() {
-                this.print_stmt(first);
-                for stmt in rest {
-                    this.hardbreak();
-                    this.print_stmt(stmt);
-                }
+pub(crate) fn print_compound(stmts: &[CStmt], ctx: &mut PrinterCtx) {
+    ctx.cbox_delim(INDENT, ("{", "}"), 1, |ctx| {
+        if let Some((first, rest)) = stmts.split_first() {
+            first.print_to(ctx);
+            for stmt in rest {
+                ctx.hardbreak();
+                stmt.print_to(ctx);
             }
-        });
-    }
+        }
+    });
 }

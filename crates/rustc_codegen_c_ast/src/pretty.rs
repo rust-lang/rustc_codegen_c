@@ -9,17 +9,17 @@ use rustc_ast_pretty::pp;
 pub const INDENT: isize = 2;
 
 /// Pretty printer
-pub struct Printer {
+pub struct PrinterCtx {
     pp: pp::Printer,
 }
 
-impl Default for Printer {
+impl Default for PrinterCtx {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Printer {
+impl PrinterCtx {
     pub fn new() -> Self {
         Self { pp: pp::Printer::new() }
     }
@@ -128,4 +128,8 @@ impl Printer {
     pub(crate) fn nbsp(&mut self) {
         self.pp.nbsp()
     }
+}
+
+pub(crate) trait Print {
+    fn print_to(&self, ctx: &mut PrinterCtx);
 }
