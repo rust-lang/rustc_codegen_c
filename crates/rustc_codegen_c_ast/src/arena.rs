@@ -6,7 +6,6 @@ use crate::func::CFuncKind;
 use crate::stmt::CStmtKind;
 use crate::ty::CTyKind;
 
-/// Memory arena for C AST nodes.
 rustc_arena::declare_arena!([
     [] decl: CDeclKind<'tcx>,
     [] expr: CExprKind<'tcx>,
