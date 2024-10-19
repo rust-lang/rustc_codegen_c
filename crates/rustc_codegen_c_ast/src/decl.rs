@@ -11,10 +11,6 @@ pub type CDecl<'mx> = &'mx CDeclKind<'mx>;
 /// C declaration kinds.
 #[derive(Debug, Clone)]
 pub enum CDeclKind<'mx> {
-    // Typedef { name: String, ty: CType },
-    // Record { name: String, fields: Vec<CDecl> },
-    // Field { name: String, ty: CType },
-    // Enum { name: String, values: Vec<CEnumConstant> },
     /// Variable declaration consisting of a name, type, and optional initializer.
     ///
     /// Example:

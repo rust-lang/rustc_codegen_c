@@ -94,8 +94,6 @@ impl CPTy {
 pub enum CTyKind<'mx> {
     /// A pointer type.
     Pointer(CTy<'mx>),
-    // Record(String),
-    // Array(CType<'mx>, usize),
 }
 
 impl<'mx> ModuleCtx<'mx> {

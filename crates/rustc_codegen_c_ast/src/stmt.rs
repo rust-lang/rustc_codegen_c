@@ -13,7 +13,6 @@ pub type CStmt<'mx> = &'mx CStmtKind<'mx>;
 pub enum CStmtKind<'mx> {
     /// Compound statement, which is a sequence of statements enclosed in braces.
     Compound(Vec<CStmt<'mx>>),
-    // If { cond: CExpr<'mx>, then_br: CStmt<'mx>, else_br: Option<CStmt<'mx>> },
     /// Return statement.
     Return(Option<CExpr<'mx>>),
     /// Declaration statement, e.g. `int x = 42;`.
@@ -32,15 +31,6 @@ impl<'mx> ModuleCtx<'mx> {
     pub fn compound(self, stmts: Vec<CStmt<'mx>>) -> CStmt<'mx> {
         self.stmt(CStmtKind::Compound(stmts))
     }
-
-    // pub fn if_stmt(
-    //     self,
-    //     cond: CExpr<'mx>,
-    //     then_br: CStmt<'mx>,
-    //     else_br: Option<CStmt<'mx>>,
-    // ) -> CStmt<'mx> {
-    //     self.stmt(CStmtKind::If { cond, then_br, else_br })
-    // }
 
     /// Create a return statement.
     pub fn ret(self, expr: Option<CExpr<'mx>>) -> CStmt<'mx> {

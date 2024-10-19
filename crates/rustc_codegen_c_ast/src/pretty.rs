@@ -1,7 +1,5 @@
 //! Pretty printing support for C AST nodes.
 
-// TODO: pretty printing test
-
 use std::borrow::Cow;
 
 use rustc_ast_pretty::pp;
