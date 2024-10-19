@@ -42,12 +42,19 @@ impl PrinterCtx {
         }
     }
 
+    /// Inconsistent breaking box
+    ///
+    /// See the module document of [`rustc_ast_pretty::pp`] for details.
     pub(crate) fn ibox(&mut self, indent: isize, op: impl FnOnce(&mut Self)) {
         self.pp.ibox(indent);
         op(self);
         self.pp.end();
     }
 
+    /// Inconsistent breaking box, with delimiters surrounding the inner content
+    ///
+    /// This is often used for printing content inside parentheses, e.g. function
+    /// arguments.
     pub(crate) fn ibox_delim(
         &mut self,
         indent: isize,
@@ -63,12 +70,19 @@ impl PrinterCtx {
         });
     }
 
+    /// Consistent breaking box
+    ///
+    /// See the module document of [`rustc_ast_pretty::pp`] for details.
     pub(crate) fn cbox(&mut self, indent: isize, op: impl FnOnce(&mut Self)) {
         self.pp.cbox(indent);
         op(self);
         self.pp.end();
     }
 
+    /// Consistent breaking box, with delimiters surrounding the inner content
+    ///
+    /// This is often used for printing content inside braces, e.g. a block of
+    /// statements.
     pub(crate) fn cbox_delim(
         &mut self,
         indent: isize,
