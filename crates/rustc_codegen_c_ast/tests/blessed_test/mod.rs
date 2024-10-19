@@ -14,7 +14,11 @@ pub fn blessed_test(name: &str, bless: impl Fn() -> String) {
     let test_case_path = Path::new("tests/blessed").join(name).with_extension("out");
     test_case_path.parent().map(std::fs::create_dir_all);
 
-    let output = bless();
+    let mut output = bless();
+    if !output.ends_with('\n') {
+        output.push('\n'); // Ensure the output ends with a newline
+    }
+
     let expected_output = std::fs::read_to_string(&test_case_path).unwrap_or_default();
     if std::env::var("RUST_BLESS").is_ok() {
         std::fs::write(test_case_path, output).unwrap();
