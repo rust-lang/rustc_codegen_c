@@ -16,6 +16,10 @@ pub enum CDeclKind<'mx> {
     // Field { name: String, ty: CType },
     // Enum { name: String, values: Vec<CEnumConstant> },
     /// Variable declaration consisting of a name, type, and optional initializer.
+    ///
+    /// Example:
+    /// - `int foo;` // `ty val`
+    /// - `int foo = bar` `ty val = expr`
     Var { name: CValue<'mx>, ty: CTy<'mx>, init: Option<CExpr<'mx>> },
 }
 
