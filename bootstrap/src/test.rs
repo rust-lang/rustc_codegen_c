@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anstream::{eprint as print, eprintln as println};
 use clap::Args;
@@ -12,7 +12,11 @@ use crate::Run;
 
 /// Run tests
 #[derive(Args, Debug)]
-pub struct TestCommand {}
+pub struct TestCommand {
+    /// Update the blessed output
+    #[clap(long)]
+    pub bless: bool,
+}
 
 impl Run for TestCommand {
     fn run(&self, manifest: &Manifest) {
@@ -37,7 +41,12 @@ impl Run for TestCommand {
                 TestType::FileCheck => {
                     cprint!("File checking {}...", testcase.name);
                     testcase.build(manifest);
-                    filechecker.run(&testcase.source, &testcase.output_file);
+                    filechecker.run(&testcase);
+                }
+                TestType::Bless => {
+                    cprint!("Blessing {}...", testcase.name);
+                    testcase.build(manifest);
+                    bless(self.bless, &testcase);
                 }
                 TestType::Compile => {
                     cprint!("Compiling {}...", testcase.name);
@@ -84,6 +93,15 @@ impl TestCommand {
             result.push(TestCase { name, source: case, output_file, test: TestType::FileCheck })
         }
 
+        // Bless tests - the output should be the same as the last run
+        for case in glob("tests/bless/*.rs").unwrap() {
+            let case = case.unwrap();
+            let filename = case.file_stem().unwrap();
+            let name = format!("bless/{}", filename.to_string_lossy());
+            let output_file = manifest.out_dir.join("tests/bless").join(filename);
+            result.push(TestCase { name, source: case, output_file, test: TestType::Bless })
+        }
+
         result
     }
 }
@@ -95,6 +113,8 @@ pub enum TestType {
     CompileLib,
     /// Run LLVM FileCheck on the generated code
     FileCheck,
+    /// Bless test - the output should be the same as the last run
+    Bless,
 }
 
 pub struct TestCase {
@@ -132,6 +152,22 @@ impl TestCase {
         log::debug!("running {:?}", command);
         command.status().unwrap();
     }
+
+    /// Get the generated C file f
+    pub fn generated(&self) -> PathBuf {
+        let case = self.source.file_stem().unwrap().to_string_lossy();
+        let generated = std::fs::read_dir(self.output_file.parent().unwrap())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .find(|entry| {
+                let filename = entry.file_name();
+                let filename = filename.to_string_lossy();
+                filename.ends_with(".c") && filename.starts_with(case.as_ref())
+            });
+
+        assert!(generated.is_some(), "could not find {case}'s generated file");
+        generated.unwrap().path()
+    }
 }
 
 struct FileChecker {
@@ -155,25 +191,28 @@ impl FileChecker {
         Self { filecheck }
     }
 
-    fn run(&self, source: &Path, output: &Path) {
-        let case = source.file_stem().unwrap().to_string_lossy();
-        let generated = std::fs::read_dir(output.parent().unwrap())
-            .unwrap()
-            .filter_map(|entry| entry.ok())
-            .find(|entry| {
-                let filename = entry.file_name();
-                let filename = filename.to_string_lossy();
-                filename.ends_with(".c") && filename.starts_with(case.as_ref())
-            });
-
-        assert!(generated.is_some(), "could not find {case}'s generated file");
-        let generated = generated.unwrap();
-
-        let generated = File::open(generated.path()).unwrap();
+    fn run(&self, case: &TestCase) {
+        let generated = File::open(case.generated()).unwrap();
         let mut command = std::process::Command::new(&self.filecheck);
-        command.arg(source).stdin(generated);
+        command.arg(&case.source).stdin(generated);
         log::debug!("running {:?}", command);
         let output = command.output().unwrap();
-        assert!(output.status.success(), "failed to run FileCheck on {case}");
+        assert!(
+            output.status.success(),
+            "failed to run FileCheck on {}",
+            case.source.file_stem().unwrap().to_string_lossy()
+        );
+    }
+}
+
+fn bless(update: bool, case: &TestCase) {
+    let output = case.generated();
+    let blessed = case.source.with_extension("c");
+    if update {
+        std::fs::copy(output, blessed).unwrap();
+    } else {
+        let output = std::fs::read(output).unwrap();
+        let blessed = std::fs::read(blessed).unwrap();
+        assert_eq!(output, blessed, "output does not match blessed output");
     }
 }
