@@ -8,36 +8,35 @@ use crate::pretty::{Print, PrinterCtx};
 use crate::ModuleCtx;
 
 /// C types.
+///
+/// A C type is either a primitive type or a complex type. Primitive types are
+/// the basic types like `int` and `char`, while complex types are types that
+/// are built from primitive types, like pointers and arrays.
+///
+/// Complex types are always interned, and thus should be unique in a specific
+/// context. See [`CTyKind`] for more information.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CTy<'mx> {
-    /// A primitive C type.
-    Primitive(CPTy),
+    /// The C `void` type.
+    Void,
+    /// The C boolean type.
+    Bool,
+    /// The C `char` type.
+    Char,
+    /// A signed integer type.
+    Int(CIntTy),
+    /// An unsigned integer type.
+    UInt(CUintTy),
     /// A non-primitive C type, e.g. a pointer type.
+    ///
+    /// This is an interned reference to a complex type.
     Ref(Interned<'mx, CTyKind<'mx>>),
 }
 
-/// C primitive types.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CPTy {
-    Isize,
-    I8,
-    I16,
-    I32,
-    I64,
-    Usize,
-    U8,
-    U16,
-    U32,
-    U64,
-}
-
-impl CPTy {
+impl<'mx> CTy<'mx> {
     /// Whether the type is a signed integer.
     pub fn is_signed(self) -> bool {
-        match self {
-            CPTy::Isize | CPTy::I8 | CPTy::I16 | CPTy::I32 | CPTy::I64 => true,
-            CPTy::Usize | CPTy::U8 | CPTy::U16 | CPTy::U32 | CPTy::U64 => false,
-        }
+        matches!(self, CTy::Int(_))
     }
 
     /// The unsigned version of this type.
@@ -45,51 +44,129 @@ impl CPTy {
     /// ## Panic
     ///
     /// Panics if the type is not a signed integer.
-    pub fn to_unsigned(self) -> CPTy {
+    pub fn to_unsigned(self) -> Self {
         match self {
-            CPTy::Isize => CPTy::Usize,
-            CPTy::I8 => CPTy::U8,
-            CPTy::I16 => CPTy::U16,
-            CPTy::I32 => CPTy::U32,
-            CPTy::I64 => CPTy::U64,
+            CTy::Int(ty) => CTy::UInt(ty.to_unsigned()),
             _ => unreachable!(),
+        }
+    }
+
+    /// Get the corresponding C type name.
+    ///
+    /// This function should be only used for primitive types.
+    ///
+    /// ## Panic
+    ///
+    /// Panics if the type is not a primitive type.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            CTy::Void => "void",
+            CTy::Bool => "_Bool",
+            CTy::Char => "char",
+            CTy::Int(ty) => ty.to_str(),
+            CTy::UInt(ty) => ty.to_str(),
+            CTy::Ref(_) => unreachable!(),
+        }
+    }
+
+    /// The maximum value of this type. From `<stdint.h>`.
+    ///
+    /// This function should be only used for integer types (signed or unsigned).
+    ///
+    /// ## Panic
+    ///
+    /// Panics if the type is not an integer type.
+    pub fn max_value(self) -> &'static str {
+        match self {
+            CTy::Int(ty) => ty.max_value(),
+            CTy::UInt(ty) => ty.max_value(),
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// C primitive types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CIntTy {
+    Isize,
+    I8,
+    I16,
+    I32,
+    I64,
+}
+
+impl CIntTy {
+    /// Get the unsigned version of this type.
+    pub fn to_unsigned(self) -> CUintTy {
+        match self {
+            CIntTy::Isize => CUintTy::Usize,
+            CIntTy::I8 => CUintTy::U8,
+            CIntTy::I16 => CUintTy::U16,
+            CIntTy::I32 => CUintTy::U32,
+            CIntTy::I64 => CUintTy::U64,
         }
     }
 
     /// Get the corresponding C type name.
     pub fn to_str(self) -> &'static str {
         match self {
-            CPTy::Isize => "size_t",
-            CPTy::I8 => "int8_t",
-            CPTy::I16 => "int16_t",
-            CPTy::I32 => "int32_t",
-            CPTy::I64 => "int64_t",
-            CPTy::Usize => "size_t",
-            CPTy::U8 => "uint8_t",
-            CPTy::U16 => "uint16_t",
-            CPTy::U32 => "uint32_t",
-            CPTy::U64 => "uint64_t",
+            CIntTy::Isize => "size_t",
+            CIntTy::I8 => "int8_t",
+            CIntTy::I16 => "int16_t",
+            CIntTy::I32 => "int32_t",
+            CIntTy::I64 => "int64_t",
         }
     }
 
     /// The maximum value of this type. From `<stdint.h>`.
     pub fn max_value(self) -> &'static str {
         match self {
-            CPTy::Isize => "SIZE_MAX",
-            CPTy::I8 => "INT8_MAX",
-            CPTy::I16 => "INT16_MAX",
-            CPTy::I32 => "INT32_MAX",
-            CPTy::I64 => "INT64_MAX",
-            CPTy::Usize => "SIZE_MAX",
-            CPTy::U8 => "UINT8_MAX",
-            CPTy::U16 => "UINT16_MAX",
-            CPTy::U32 => "UINT32_MAX",
-            CPTy::U64 => "UINT64_MAX",
+            CIntTy::Isize => "SIZE_MAX",
+            CIntTy::I8 => "INT8_MAX",
+            CIntTy::I16 => "INT16_MAX",
+            CIntTy::I32 => "INT32_MAX",
+            CIntTy::I64 => "INT64_MAX",
         }
     }
 }
 
-/// Complex C types.
+/// C primitive types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CUintTy {
+    Usize,
+    U8,
+    U16,
+    U32,
+    U64,
+}
+
+impl CUintTy {
+    /// Get the corresponding C type name.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            CUintTy::Usize => "size_t",
+            CUintTy::U8 => "uint8_t",
+            CUintTy::U16 => "uint16_t",
+            CUintTy::U32 => "uint32_t",
+            CUintTy::U64 => "uint64_t",
+        }
+    }
+
+    /// The maximum value of this type. From `<stdint.h>`.
+    pub fn max_value(self) -> &'static str {
+        match self {
+            CUintTy::Usize => "SIZE_MAX",
+            CUintTy::U8 => "UINT8_MAX",
+            CUintTy::U16 => "UINT16_MAX",
+            CUintTy::U32 => "UINT32_MAX",
+            CUintTy::U64 => "UINT64_MAX",
+        }
+    }
+}
+
+/// Complex C types, e.g. pointers and arrays.
+///
+/// This type is interned, and thus should be unique in a specific context.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CTyKind<'mx> {
     /// A pointer type.
@@ -100,11 +177,11 @@ impl<'mx> ModuleCtx<'mx> {
     /// Get the type of an signed integer
     pub fn get_int_type(&self, int: IntTy) -> CTy<'mx> {
         match int {
-            IntTy::Isize => CTy::Primitive(CPTy::Isize),
-            IntTy::I8 => CTy::Primitive(CPTy::I8),
-            IntTy::I16 => CTy::Primitive(CPTy::I16),
-            IntTy::I32 => CTy::Primitive(CPTy::I32),
-            IntTy::I64 => CTy::Primitive(CPTy::I64),
+            IntTy::Isize => CTy::Int(CIntTy::Isize),
+            IntTy::I8 => CTy::Int(CIntTy::I8),
+            IntTy::I16 => CTy::Int(CIntTy::I16),
+            IntTy::I32 => CTy::Int(CIntTy::I32),
+            IntTy::I64 => CTy::Int(CIntTy::I64),
             IntTy::I128 => unimplemented!("i128 not supported yet"),
         }
     }
@@ -112,11 +189,11 @@ impl<'mx> ModuleCtx<'mx> {
     /// Get the type of an unsigned integer
     pub fn get_uint_type(&self, uint: UintTy) -> CTy<'mx> {
         match uint {
-            UintTy::Usize => CTy::Primitive(CPTy::Usize),
-            UintTy::U8 => CTy::Primitive(CPTy::U8),
-            UintTy::U16 => CTy::Primitive(CPTy::U16),
-            UintTy::U32 => CTy::Primitive(CPTy::U32),
-            UintTy::U64 => CTy::Primitive(CPTy::U64),
+            UintTy::Usize => CTy::UInt(CUintTy::Usize),
+            UintTy::U8 => CTy::UInt(CUintTy::U8),
+            UintTy::U16 => CTy::UInt(CUintTy::U16),
+            UintTy::U32 => CTy::UInt(CUintTy::U32),
+            UintTy::U64 => CTy::UInt(CUintTy::U64),
             UintTy::U128 => unimplemented!("u128 not supported yet"),
         }
     }
@@ -164,8 +241,7 @@ pub(crate) fn print_declarator(mut ty: CTy, val: Option<CValue>, ctx: &mut Print
         };
     }
 
-    let CTy::Primitive(base) = ty else { unreachable!() };
-    ctx.word(base.to_str());
+    ctx.word(ty.to_str()); // `ty` should be a primitive type here
     if val.is_some() {
         ctx.nbsp();
     }
