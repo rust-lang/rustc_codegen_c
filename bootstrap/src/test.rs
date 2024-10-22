@@ -57,23 +57,19 @@ impl TestCommand {
     pub fn collect_testcases(&self, manifest: &Manifest) -> Vec<TestCase> {
         let mut result = vec![];
 
+        // Test auxiliary (should compile first)
+        for case in glob("tests/auxiliary/*.rs").unwrap() {
+            let case = case.unwrap();
+            let filename = case.file_stem().unwrap();
+            let name = format!("auxiliary/{}", filename.to_string_lossy());
+            let output_file = manifest.out_dir.join(filename);
+            result.push(TestCase { name, source: case, output_file, test: TestType::CompileLib })
+        }
+
         // Examples
         for case in glob("examples/*.rs").unwrap() {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
-            if filename == "mini_core" {
-                // First compile mini_core
-                result.insert(
-                    0,
-                    TestCase {
-                        name: "mini_core".into(),
-                        source: case.clone(),
-                        output_file: manifest.out_dir.join(Path::new(filename)),
-                        test: TestType::CompileLib,
-                    },
-                );
-                continue;
-            }
             let name = format!("examples/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("examples").join(filename);
             result.push(TestCase { name, source: case, output_file, test: TestType::Compile })
