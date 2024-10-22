@@ -1,3 +1,5 @@
+//@ aux-build:mini_core.rs
+
 #![feature(no_core)]
 #![no_core]
 #![no_main]

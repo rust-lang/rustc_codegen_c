@@ -1,5 +1,7 @@
 //! Test that the generated code has the filename and function name in it
 
+//@ aux-build:mini_core.rs
+
 // CHECK: filename
 
 #![feature(no_core)]

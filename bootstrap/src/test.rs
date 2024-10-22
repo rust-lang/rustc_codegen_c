@@ -5,6 +5,7 @@ use anstream::{eprint as print, eprintln as println};
 use clap::Args;
 use color_print::{cprint, cprintln};
 use glob::glob;
+use similar::{ChangeTag, TextDiff};
 use which::which;
 
 use crate::manifest::Manifest;
@@ -12,7 +13,11 @@ use crate::Run;
 
 /// Run tests
 #[derive(Args, Debug)]
-pub struct TestCommand {}
+pub struct TestCommand {
+    /// Update the blessed output
+    #[clap(long)]
+    pub bless: bool,
+}
 
 impl Run for TestCommand {
     fn run(&self, manifest: &Manifest) {
@@ -37,7 +42,12 @@ impl Run for TestCommand {
                 TestType::FileCheck => {
                     cprint!("File checking {}...", testcase.name);
                     testcase.build(manifest);
-                    filechecker.run(&testcase.source, &testcase.output_file);
+                    filechecker.run(&testcase);
+                }
+                TestType::Bless => {
+                    cprint!("Blessing {}...", testcase.name);
+                    testcase.build(manifest);
+                    bless(self.bless, &testcase);
                 }
                 TestType::Compile => {
                     cprint!("Compiling {}...", testcase.name);
@@ -55,16 +65,7 @@ impl Run for TestCommand {
 
 impl TestCommand {
     pub fn collect_testcases(&self, manifest: &Manifest) -> Vec<TestCase> {
-        let mut result = vec![];
-
-        // Test auxiliary (should compile first)
-        for case in glob("tests/auxiliary/*.rs").unwrap() {
-            let case = case.unwrap();
-            let filename = case.file_stem().unwrap();
-            let name = format!("auxiliary/{}", filename.to_string_lossy());
-            let output_file = manifest.out_dir.join(filename);
-            result.push(TestCase { name, source: case, output_file, test: TestType::CompileLib })
-        }
+        let mut tests = vec![];
 
         // Examples
         for case in glob("examples/*.rs").unwrap() {
@@ -72,7 +73,7 @@ impl TestCommand {
             let filename = case.file_stem().unwrap();
             let name = format!("examples/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("examples").join(filename);
-            result.push(TestCase { name, source: case, output_file, test: TestType::Compile })
+            tests.push(TestCase { name, source: case, output_file, test: TestType::Compile })
         }
 
         // Codegen tests
@@ -81,18 +82,49 @@ impl TestCommand {
             let filename = case.file_stem().unwrap();
             let name = format!("codegen/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("tests/codegen").join(filename);
-            result.push(TestCase { name, source: case, output_file, test: TestType::FileCheck })
+            tests.push(TestCase { name, source: case, output_file, test: TestType::FileCheck })
         }
 
-        result
+        // Bless tests - the output should be the same as the last run
+        for case in glob("tests/bless/*.rs").unwrap() {
+            let case = case.unwrap();
+            let filename = case.file_stem().unwrap();
+            let name = format!("bless/{}", filename.to_string_lossy());
+            let output_file = manifest.out_dir.join("tests/bless").join(filename);
+            tests.push(TestCase { name, source: case, output_file, test: TestType::Bless })
+        }
+
+        // Collect test-auxiliary
+        let aux_use = regex::Regex::new(r"^//@\s*aux-build:(?P<fname>.*)").unwrap();
+        let mut auxiliary = vec![];
+        for case in tests.iter() {
+            let source = std::fs::read_to_string(&case.source).unwrap();
+            for cap in aux_use.captures_iter(&source) {
+                let fname = cap.name("fname").unwrap().as_str();
+                let source = Path::new("tests/auxiliary").join(fname);
+                let filename = source.file_stem().unwrap();
+                let name = format!("auxiliary/{}", filename.to_string_lossy());
+                let output_file = manifest.out_dir.join(filename); // aux files are output to the base directory
+                auxiliary.push(TestCase { name, source, output_file, test: TestType::CompileLib })
+            }
+        }
+
+        // Compile auxiliary before the tests
+        let mut cases = auxiliary;
+        cases.extend(tests);
+        cases
     }
 }
 
 pub enum TestType {
     /// Test an executable can be compiled
     Compile,
+    /// Test a library can be compiled
     CompileLib,
+    /// Run LLVM FileCheck on the generated code
     FileCheck,
+    /// Bless test - the output should be the same as the last run
+    Bless,
 }
 
 pub struct TestCase {
@@ -125,10 +157,26 @@ impl TestCase {
             .args(["--crate-type", "lib"])
             .arg("-O")
             .arg(&self.source)
-            .arg("--out-dir")
-            .arg(self.output_file.parent().unwrap());
+            .arg("--out-dir") // we use `--out-dir` to integrate with the default name convention
+            .arg(output_dir); // so here we ignore the filename and just use the directory
         log::debug!("running {:?}", command);
         command.status().unwrap();
+    }
+
+    /// Get the generated C file f
+    pub fn generated(&self) -> PathBuf {
+        let case = self.source.file_stem().unwrap().to_string_lossy();
+        let generated = std::fs::read_dir(self.output_file.parent().unwrap())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .find(|entry| {
+                let filename = entry.file_name();
+                let filename = filename.to_string_lossy();
+                filename.ends_with(".c") && filename.starts_with(case.as_ref())
+            });
+
+        assert!(generated.is_some(), "could not find {case}'s generated file");
+        generated.unwrap().path()
     }
 }
 
@@ -153,25 +201,41 @@ impl FileChecker {
         Self { filecheck }
     }
 
-    fn run(&self, source: &Path, output: &Path) {
-        let case = source.file_stem().unwrap().to_string_lossy();
-        let generated = std::fs::read_dir(output.parent().unwrap())
-            .unwrap()
-            .filter_map(|entry| entry.ok())
-            .find(|entry| {
-                let filename = entry.file_name();
-                let filename = filename.to_string_lossy();
-                filename.ends_with(".c") && filename.starts_with(case.as_ref())
-            });
-
-        assert!(generated.is_some(), "could not find {case}'s generated file");
-        let generated = generated.unwrap();
-
-        let generated = File::open(generated.path()).unwrap();
+    fn run(&self, case: &TestCase) {
+        let generated = File::open(case.generated()).unwrap();
         let mut command = std::process::Command::new(&self.filecheck);
-        command.arg(source).stdin(generated);
+        command.arg(&case.source).stdin(generated);
         log::debug!("running {:?}", command);
         let output = command.output().unwrap();
-        assert!(output.status.success(), "failed to run FileCheck on {case}");
+        assert!(
+            output.status.success(),
+            "failed to run FileCheck on {}",
+            case.source.file_stem().unwrap().to_string_lossy()
+        );
+    }
+}
+
+fn bless(update: bool, case: &TestCase) {
+    let output = case.generated();
+    let blessed = case.source.with_extension("c");
+    if update {
+        std::fs::copy(output, blessed).unwrap();
+    } else {
+        let output = std::fs::read_to_string(output).unwrap();
+        let blessed = std::fs::read_to_string(blessed).unwrap();
+
+        let diff = TextDiff::from_lines(&blessed, &output);
+        if diff.ratio() < 1.0 {
+            cprintln!("<r,s>output does not match blessed output</r,s>");
+            for change in diff.iter_all_changes() {
+                let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                match change.tag() {
+                    ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                    ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                    ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                }
+            }
+            std::process::exit(1);
+        }
     }
 }
