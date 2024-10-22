@@ -37,7 +37,7 @@ impl Run for TestCommand {
                 TestType::FileCheck => {
                     cprint!("File checking {}...", testcase.name);
                     testcase.build(manifest);
-                    filechecker.run(&testcase.source, &testcase.output);
+                    filechecker.run(&testcase.source, &testcase.output_file);
                 }
                 TestType::Compile => {
                     cprint!("Compiling {}...", testcase.name);
@@ -68,15 +68,15 @@ impl TestCommand {
                     TestCase {
                         name: "mini_core".into(),
                         source: case.clone(),
-                        output: manifest.out_dir.join(Path::new(filename)),
+                        output_file: manifest.out_dir.join(Path::new(filename)),
                         test: TestType::CompileLib,
                     },
                 );
                 continue;
             }
             let name = format!("examples/{}", filename.to_string_lossy());
-            let output = manifest.out_dir.join("examples").join(filename);
-            result.push(TestCase { name, source: case, output, test: TestType::Compile })
+            let output_file = manifest.out_dir.join("examples").join(filename);
+            result.push(TestCase { name, source: case, output_file, test: TestType::Compile })
         }
 
         // Codegen tests
@@ -84,8 +84,8 @@ impl TestCommand {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
             let name = format!("codegen/{}", filename.to_string_lossy());
-            let output = manifest.out_dir.join("tests/codegen").join(filename);
-            result.push(TestCase { name, source: case, output, test: TestType::FileCheck })
+            let output_file = manifest.out_dir.join("tests/codegen").join(filename);
+            result.push(TestCase { name, source: case, output_file, test: TestType::FileCheck })
         }
 
         result
@@ -104,13 +104,13 @@ pub enum TestType {
 pub struct TestCase {
     pub name: String,
     pub source: PathBuf,
-    pub output: PathBuf,
+    pub output_file: PathBuf,
     pub test: TestType,
 }
 
 impl TestCase {
     pub fn build(&self, manifest: &Manifest) {
-        let output_dir = self.output.parent().unwrap();
+        let output_dir = self.output_file.parent().unwrap();
         std::fs::create_dir_all(output_dir).unwrap();
         let mut command = manifest.rustc();
         command
@@ -118,13 +118,13 @@ impl TestCase {
             .arg("-O")
             .arg(&self.source)
             .arg("-o")
-            .arg(&self.output);
+            .arg(&self.output_file);
         log::debug!("running {:?}", command);
         command.status().unwrap();
     }
 
     pub fn build_lib(&self, manifest: &Manifest) {
-        let output_dir = self.output.parent().unwrap();
+        let output_dir = self.output_file.parent().unwrap();
         std::fs::create_dir_all(output_dir).unwrap();
         let mut command = manifest.rustc();
         command
