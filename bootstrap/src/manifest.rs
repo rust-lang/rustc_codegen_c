@@ -1,5 +1,6 @@
 use anstream::eprintln as println;
 use color_print::cprintln;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -45,12 +46,13 @@ impl Manifest {
     }
 
     /// The path to the rustc codegen c library
-    pub fn codegen_backend(&self) -> &'static Path {
-        if self.release {
-            Path::new("crates/target/release/librustc_codegen_c.so")
+    pub fn codegen_backend(&self) -> PathBuf {
+        let path = if self.release {
+            Path::new("crates/target/release/librustc_codegen_c")
         } else {
-            Path::new("crates/target/debug/librustc_codegen_c.so")
-        }
+            Path::new("crates/target/debug/librustc_codegen_c")
+        };
+        path.with_extension(env::consts::DLL_EXTENSION)
     }
 
     /// The command to run rustc with the codegen backend
