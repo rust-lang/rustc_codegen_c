@@ -23,6 +23,9 @@ impl Log for RustcCommand {
     fn log_step(&self, step_type: &str, name: &str, details: Vec<(&str, &str)>) {
         if self.verbose {
             cprintln!("<b>[RUSTC]</b> {} {}", step_type, name);
+            for (label, value) in details {
+                cprintln!("       {}: {}", label, value);
+            }
         }
     }
 
