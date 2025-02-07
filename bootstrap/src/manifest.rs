@@ -3,6 +3,7 @@ use color_print::cprintln;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[derive(Debug)]
 pub struct Manifest {
     pub verbose: bool,
     pub release: bool,

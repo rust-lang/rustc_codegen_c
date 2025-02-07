@@ -27,38 +27,76 @@ impl Run for TestCommand {
             cprintln!("<r,s>Test failed</r,s>: {}", info);
         }));
 
+        if manifest.verbose {
+            cprintln!("<b>[TEST]</b> preparing to run tests with manifest: {:?}", manifest);
+        }
+
         cprintln!("<b>[TEST]</b> running cargo test");
         let mut command = std::process::Command::new("cargo");
         command.args(["test", "--manifest-path", "crates/Cargo.toml"]);
+        if manifest.verbose {
+            cprintln!("<b>[TEST]</b> executing command: {:?}", command);
+        }
         log::debug!("running {:?}", command);
         assert!(command.status().unwrap().success(), "failed to run {:?}", command);
 
         let testcases = self.collect_testcases(manifest);
         cprintln!("<b>[TEST]</b> found {} testcases", testcases.len());
+        if manifest.verbose {
+            for case in &testcases {
+                cprintln!("<b>[TEST]</b> found test: {} ({:?})", case.name, case.test);
+            }
+        }
 
         let filechecker = FileChecker::new();
         for testcase in testcases {
             match testcase.test {
                 TestType::FileCheck => {
-                    cprint!("File checking {}...", testcase.name);
+                    if manifest.verbose {
+                        cprintln!("<b>[TEST]</b> file checking <cyan>{}</cyan>", testcase.name);
+                        cprintln!("       source: {}", testcase.source.display());
+                        cprintln!("       output: {}", testcase.output_file.display());
+                    } else {
+                        cprint!("File checking {}... ", testcase.name);
+                    }
                     testcase.build(manifest);
                     filechecker.run(&testcase);
                 }
                 TestType::Bless => {
-                    cprint!("Blessing {}...", testcase.name);
+                    if manifest.verbose {
+                        cprintln!("<b>[TEST]</b> blessing <cyan>{}</cyan>", testcase.name);
+                        cprintln!("       source: {}", testcase.source.display());
+                        cprintln!("       output: {}", testcase.output_file.display());
+                    } else {
+                        cprint!("Blessing {}... ", testcase.name);
+                    }
                     testcase.build(manifest);
                     bless(self.bless, &testcase);
                 }
                 TestType::Compile => {
-                    cprint!("Compiling {}...", testcase.name);
+                    if manifest.verbose {
+                        cprintln!("<b>[TEST]</b> compiling <cyan>{}</cyan>", testcase.name);
+                        cprintln!("       source: {}", testcase.source.display());
+                        cprintln!("       output: {}", testcase.output_file.display());
+                    } else {
+                        cprint!("Compiling {}... ", testcase.name);
+                    }
                     testcase.build(manifest);
                 }
                 TestType::CompileLib => {
-                    cprint!("Compiling lib {}...", testcase.name);
+                    if manifest.verbose {
+                        cprintln!("<b>[TEST]</b> compiling lib <cyan>{}</cyan>", testcase.name);
+                        cprintln!("       source: {}", testcase.source.display());
+                        cprintln!("       output: {}", testcase.output_file.display());
+                    } else {
+                        cprint!("Compiling lib {}... ", testcase.name);
+                    }
                     testcase.build_lib(manifest);
                 }
             }
-            cprintln!("<g>OK</g>");
+            if !manifest.verbose {
+                cprintln!("<g>OK</g>");
+            }
         }
     }
 }
@@ -116,6 +154,7 @@ impl TestCommand {
     }
 }
 
+#[derive(Debug)]
 pub enum TestType {
     /// Test an executable can be compiled
     Compile,
@@ -145,8 +184,16 @@ impl TestCase {
             .arg(&self.source)
             .arg("-o")
             .arg(&self.output_file);
+        if manifest.verbose {
+            cprintln!("       command: {}", format!("{:?}", command).replace('"', ""));
+        }
         log::debug!("running {:?}", command);
-        command.status().unwrap();
+        let status = command.status().unwrap();
+        if manifest.verbose {
+            if status.success() {
+                cprintln!("       <g>success</g>");
+            }
+        }
     }
 
     pub fn build_lib(&self, manifest: &Manifest) {
@@ -157,10 +204,18 @@ impl TestCase {
             .args(["--crate-type", "lib"])
             .arg("-O")
             .arg(&self.source)
-            .arg("--out-dir") // we use `--out-dir` to integrate with the default name convention
-            .arg(output_dir); // so here we ignore the filename and just use the directory
+            .arg("--out-dir")
+            .arg(output_dir);
+        if manifest.verbose {
+            cprintln!("       command: {}", format!("{:?}", command).replace('"', ""));
+        }
         log::debug!("running {:?}", command);
-        command.status().unwrap();
+        let status = command.status().unwrap();
+        if manifest.verbose {
+            if status.success() {
+                cprintln!("       <g>success</g>");
+            }
+        }
     }
 
     /// Get the generated C file f
