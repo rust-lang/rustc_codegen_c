@@ -57,7 +57,7 @@ fn main() {
             test.run(&manifest)
         }
         Command::Clean(clean) => clean.run(&manifest),
-        Command::Rustc(rustc) => {
+        Command::Rustc(mut rustc) => {
             rustc.verbose |= cli.verbose;
             rustc.run(&manifest)
         }
