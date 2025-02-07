@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use clap::Args;
+use color_print::cprintln;
 
+use crate::log::Log;
 use crate::manifest::Manifest;
 use crate::Run;
 
@@ -12,6 +14,21 @@ pub struct RustcCommand {
 
     #[arg(last = true)]
     slop: Vec<String>,
+
+    #[arg(short, long)]
+    pub verbose: bool,
+}
+
+impl Log for RustcCommand {
+    fn log_step(&self, step_type: &str, name: &str, details: Vec<(&str, &str)>) {
+        if self.verbose {
+            cprintln!("<b>[RUSTC]</b> {} {}", step_type, name);
+        }
+    }
+
+    fn is_verbose(&self) -> bool {
+        self.verbose
+    }
 }
 
 impl Run for RustcCommand {
@@ -25,7 +42,11 @@ impl Run for RustcCommand {
             .arg("--out-dir")
             .arg(&manifest.out_dir)
             .args(&self.slop);
-        log::debug!("running {:?}", command);
-        command.status().unwrap();
+        if self.verbose {
+            command.env("RUST_BACKTRACE", "full");
+        }
+
+        let status = command.status().unwrap();
+        self.log_command("rustc", &command, &Some(status));
     }
 }

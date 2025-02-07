@@ -4,6 +4,7 @@ use crate::manifest::Manifest;
 
 mod clean;
 mod fmt;
+mod log;
 mod manifest;
 mod rustc;
 mod test;
@@ -49,7 +50,22 @@ fn main() {
         release: cli.release,
         out_dir: cli.out_dir.unwrap_or("build".to_string()).into(),
     };
-    match cli.command {
+
+    // 更新子命令的 verbose 标志
+    let command = match cli.command {
+        Command::Test(mut test) => {
+            test.verbose |= cli.verbose;
+            Command::Test(test)
+        }
+        Command::Clean(clean) => Command::Clean(clean),
+        Command::Rustc(mut rustc) => {
+            rustc.verbose |= cli.verbose;
+            Command::Rustc(rustc)
+        }
+        Command::Fmt(fmt) => Command::Fmt(fmt),
+    };
+
+    match command {
         Command::Test(test) => test.run(&manifest),
         Command::Clean(clean) => clean.run(&manifest),
         Command::Rustc(rustc) => rustc.run(&manifest),
