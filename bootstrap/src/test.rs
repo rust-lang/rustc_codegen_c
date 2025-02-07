@@ -8,7 +8,6 @@ use glob::glob;
 use similar::{ChangeTag, TextDiff};
 use which::which;
 
-use crate::log::Log;
 use crate::manifest::Manifest;
 use crate::Run;
 
@@ -16,32 +15,17 @@ use crate::Run;
 #[derive(Args, Debug)]
 pub struct TestCommand {
     /// Update the blessed output
-    #[clap(long)]
+    #[arg(long)]
     pub bless: bool,
 
     /// Whether to show verbose output
-    #[clap(short, long)]
+    #[arg(short, long)]
     pub verbose: bool,
 }
 
-impl Log for TestCommand {
-    fn log_step(&self, step_type: &str, name: &str, details: Vec<(&str, &str)>) {
-        if self.verbose {
-            cprintln!("<b>[TEST]</b> {} <cyan>{}</cyan>", step_type, name);
-            for (label, value) in details {
-                cprintln!("       {}: {}", label, value);
-            }
-        } else {
-            cprint!("{} {}... ", step_type, name);
-        }
-    }
-
-    fn is_verbose(&self) -> bool {
-        self.verbose
-    }
-}
-
 impl Run for TestCommand {
+    const STEP_DISPLAY_NAME: &'static str = "TEST";
+
     fn run(&self, manifest: &Manifest) {
         manifest.prepare();
 
@@ -49,70 +33,51 @@ impl Run for TestCommand {
             cprintln!("<r,s>Test failed</r,s>: {}", info);
         }));
 
-        cprintln!("<b>[TEST]</b> running cargo test");
+        // action: Run cargo test
+        self.log_action_start("running", "cargo test");
         let mut command = std::process::Command::new("cargo");
         command.args(["test", "--manifest-path", "crates/Cargo.toml"]);
-        let status = command.status().unwrap();
-        self.log_command("cargo", &command, &Some(status));
+        self.command_status("cargo", &mut command);
 
         let testcases = self.collect_testcases(manifest);
-        self.log_step(
-            "tests found",
-            &format!("found {} testcases", testcases.len()),
-            testcases.iter().map(|t| (t.test.as_str(), t.name.as_str())).collect(),
-        );
+        self.log_action_start(&format!("found {} testcases", testcases.len()), "");
+        testcases.iter().for_each(|t| self.log_action_context(t.test.as_str(), t.name.as_str()));
 
         let filechecker = FileChecker::new(self.verbose);
         for testcase in testcases {
             match testcase.test {
                 TestType::FileCheck => {
-                    self.log_step(
-                        "file checking",
-                        &testcase.name,
-                        vec![
-                            ("source", &testcase.source.display().to_string()),
-                            ("output", &testcase.output_file.display().to_string()),
-                        ],
-                    );
+                    self.log_action_start("TEST file checking", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build(manifest);
-                    filechecker.run(&testcase);
+                    filechecker.check_testcase(&testcase);
                 }
                 TestType::Bless => {
-                    self.log_step(
-                        "blessing",
-                        &testcase.name,
-                        vec![
-                            ("source", &testcase.source.display().to_string()),
-                            ("output", &testcase.output_file.display().to_string()),
-                        ],
-                    );
+                    self.log_action_start("TEST Bless", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build(manifest);
                     bless(self.bless, &testcase);
                 }
                 TestType::Compile => {
-                    self.log_step(
-                        "compiling",
-                        &testcase.name,
-                        vec![
-                            ("source", &testcase.source.display().to_string()),
-                            ("output", &testcase.output_file.display().to_string()),
-                        ],
-                    );
+                    self.log_action_start("TEST Compile", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build(manifest);
                 }
                 TestType::CompileLib => {
-                    self.log_step(
-                        "compiling lib",
-                        &testcase.name,
-                        vec![
-                            ("source", &testcase.source.display().to_string()),
-                            ("output", &testcase.output_file.display().to_string()),
-                        ],
-                    );
+                    self.log_action_start("TEST CompileLib", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build_lib(manifest);
                 }
             }
         }
+    }
+
+    fn verbose(&self) -> bool {
+        self.verbose
     }
 }
 
@@ -206,15 +171,13 @@ pub struct TestCase {
     pub verbose: bool,
 }
 
-impl Log for TestCase {
-    fn log_step(&self, step_type: &str, name: &str, details: Vec<(&str, &str)>) {
-        cprintln!("<b>[TEST]</b> {} {} <cyan>{}</cyan>", step_type, name, self.name);
-        for (label, value) in details {
-            cprintln!("       {}: {}", label, value);
-        }
+impl Run for TestCase {
+    const STEP_DISPLAY_NAME: &'static str = "TESTCASE";
+    fn run(&self, manifest: &Manifest) {
+        self.build(manifest);
     }
 
-    fn is_verbose(&self) -> bool {
+    fn verbose(&self) -> bool {
         self.verbose
     }
 }
@@ -240,8 +203,7 @@ impl TestCase {
             .arg(&self.source)
             .arg("-o")
             .arg(&self.output_file);
-        let status = command.status().unwrap();
-        self.log_command("compile", &command, &Some(status));
+        self.command_status("compile", &mut command);
     }
 
     pub fn build_lib(&self, manifest: &Manifest) {
@@ -254,8 +216,7 @@ impl TestCase {
             .arg(&self.source)
             .arg("--out-dir")
             .arg(output_dir);
-        let status = command.status().unwrap();
-        self.log_command("compile", &command, &Some(status));
+        self.command_status("compile lib", &mut command);
     }
 
     /// Get the generated C file f
@@ -280,36 +241,16 @@ struct FileChecker {
     verbose: bool,
 }
 
-impl Log for FileChecker {
-    fn log_step(&self, step_type: &str, name: &str, details: Vec<(&str, &str)>) {
-        cprintln!("<b>[FileCheck]</b> {} <cyan>{}</cyan>", step_type, name);
-        for (label, value) in details {
-            cprintln!("       {}: {}", label, value);
-        }
-    }
+impl Run for FileChecker {
+    const STEP_DISPLAY_NAME: &'static str = "FILECHECK";
 
-    fn log_command(
-        &self,
-        prefix: &str,
-        command: &std::process::Command,
-        status: &Option<std::process::ExitStatus>,
-    ) {
-        if self.verbose {
-            cprintln!("       {}: {}", prefix, format!("{:?}", command).replace('"', ""));
+    fn run(&self, _manifest: &Manifest) {}
 
-            if let Some(status) = status {
-                if status.success() {
-                    cprintln!("       <g>success</g>");
-                } else {
-                    cprintln!("       <r>failed</r>");
-                }
-            }
-        }
-    }
-    fn is_verbose(&self) -> bool {
+    fn verbose(&self) -> bool {
         self.verbose
     }
 }
+
 impl FileChecker {
     pub fn new(verbose: bool) -> Self {
         let filecheck = [
@@ -327,12 +268,11 @@ impl FileChecker {
         Self { filecheck, verbose }
     }
 
-    fn run(&self, case: &TestCase) {
+    fn check_testcase(&self, case: &TestCase) {
         let generated = File::open(case.generated()).unwrap();
         let mut command = std::process::Command::new(&self.filecheck);
         command.arg(&case.source).stdin(generated);
-        let output = command.output().unwrap();
-        self.log_command("filecheck", &command, &Some(output.status));
+        let output = self.command_output("filecheck", &mut command);
         assert!(
             output.status.success(),
             "failed to run FileCheck on {}",

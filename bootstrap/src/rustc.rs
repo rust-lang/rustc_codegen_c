@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use color_print::cprintln;
 
-use crate::log::Log;
 use crate::manifest::Manifest;
 use crate::Run;
 
@@ -19,22 +17,9 @@ pub struct RustcCommand {
     pub verbose: bool,
 }
 
-impl Log for RustcCommand {
-    fn log_step(&self, step_type: &str, name: &str, details: Vec<(&str, &str)>) {
-        if self.verbose {
-            cprintln!("<b>[RUSTC]</b> {} {}", step_type, name);
-            for (label, value) in details {
-                cprintln!("       {}: {}", label, value);
-            }
-        }
-    }
-
-    fn is_verbose(&self) -> bool {
-        self.verbose
-    }
-}
-
 impl Run for RustcCommand {
+    const STEP_DISPLAY_NAME: &'static str = "RUSTC";
+
     fn run(&self, manifest: &Manifest) {
         manifest.prepare();
 
@@ -49,7 +34,10 @@ impl Run for RustcCommand {
             command.env("RUST_BACKTRACE", "full");
         }
 
-        let status = command.status().unwrap();
-        self.log_command("rustc", &command, &Some(status));
+        self.command_status("rustc", &mut command);
+    }
+
+    fn verbose(&self) -> bool {
+        self.verbose
     }
 }

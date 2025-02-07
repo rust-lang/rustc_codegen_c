@@ -10,9 +10,14 @@ use crate::Run;
 pub struct FmtCommand {
     #[arg(short, long)]
     pub check: bool,
+
+    #[arg(short, long)]
+    pub verbose: bool,
 }
 
 impl Run for FmtCommand {
+    const STEP_DISPLAY_NAME: &'static str = "FMT";
+
     fn run(&self, _manifest: &crate::manifest::Manifest) {
         self.perform(
             Command::new("cargo").arg("fmt").args(["--manifest-path", "bootstrap/Cargo.toml"]),
@@ -30,6 +35,10 @@ impl Run for FmtCommand {
             self.perform(Command::new("rustfmt").args(["--edition", "2021"]).arg(file.unwrap()));
         }
     }
+
+    fn verbose(&self) -> bool {
+        self.verbose
+    }
 }
 
 impl FmtCommand {
@@ -37,7 +46,7 @@ impl FmtCommand {
         if self.check {
             command.arg("--check");
         }
-        log::debug!("running {:?}", command);
-        assert!(command.status().unwrap().success(), "failed to run {:?}", command);
+
+        self.command_status("format code", command);
     }
 }
