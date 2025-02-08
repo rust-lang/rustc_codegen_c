@@ -51,24 +51,16 @@ fn main() {
         out_dir: cli.out_dir.unwrap_or("build".to_string()).into(),
     };
 
-    // 更新子命令的 verbose 标志
-    let command = match cli.command {
+    match cli.command {
         Command::Test(mut test) => {
             test.verbose |= cli.verbose;
-            Command::Test(test)
+            test.run(&manifest)
         }
-        Command::Clean(clean) => Command::Clean(clean),
-        Command::Rustc(mut rustc) => {
-            rustc.verbose |= cli.verbose;
-            Command::Rustc(rustc)
-        }
-        Command::Fmt(fmt) => Command::Fmt(fmt),
-    };
-
-    match command {
-        Command::Test(test) => test.run(&manifest),
         Command::Clean(clean) => clean.run(&manifest),
-        Command::Rustc(rustc) => rustc.run(&manifest),
+        Command::Rustc(rustc) => {
+            rustc.verbose |= cli.verbose;
+            rustc.run(&manifest)
+        }
         Command::Fmt(fmt) => fmt.run(&manifest),
     }
 }
