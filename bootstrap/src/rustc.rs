@@ -12,9 +12,14 @@ pub struct RustcCommand {
 
     #[arg(last = true)]
     slop: Vec<String>,
+
+    #[arg(short, long)]
+    pub verbose: bool,
 }
 
 impl Run for RustcCommand {
+    const STEP_DISPLAY_NAME: &'static str = "RUSTC";
+
     fn run(&self, manifest: &Manifest) {
         manifest.prepare();
 
@@ -25,7 +30,14 @@ impl Run for RustcCommand {
             .arg("--out-dir")
             .arg(&manifest.out_dir)
             .args(&self.slop);
-        log::debug!("running {:?}", command);
-        command.status().unwrap();
+        if self.verbose {
+            command.env("RUST_BACKTRACE", "full");
+        }
+
+        self.command_status("rustc", &mut command);
+    }
+
+    fn verbose(&self) -> bool {
+        self.verbose
     }
 }

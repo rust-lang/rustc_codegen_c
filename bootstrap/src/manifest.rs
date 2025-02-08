@@ -1,8 +1,12 @@
-use anstream::eprintln as println;
-use color_print::cprintln;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use anstream::eprintln as println;
+use color_print::cprintln;
+
+use crate::Run;
+
+#[derive(Debug)]
 pub struct Manifest {
     pub verbose: bool,
     pub release: bool,
@@ -12,36 +16,8 @@ pub struct Manifest {
 impl Manifest {
     /// Builds the rustc codegen c library
     pub fn prepare(&self) {
-        cprintln!("<b>[BUILD]</b> codegen backend");
-        let mut command = Command::new("cargo");
-        command.arg("build").args(["--manifest-path", "crates/Cargo.toml"]);
-        if self.verbose {
-            command.args(["-F", "debug"]);
-        }
-        if self.release {
-            command.arg("--release");
-        }
-        log::debug!("running {:?}", command);
-        command.status().unwrap();
-
-        cprintln!("<b>[BUILD]</b> librust_runtime");
-        std::fs::create_dir_all(&self.out_dir).unwrap();
-        let cc = std::env::var("CC").unwrap_or("clang".to_string());
-        let mut command = Command::new(&cc);
-        command
-            .arg("rust_runtime/rust_runtime.c")
-            .arg("-o")
-            .arg(self.out_dir.join("rust_runtime.o"))
-            .arg("-c");
-        log::debug!("running {:?}", command);
-        command.status().unwrap();
-        let mut command = Command::new("ar");
-        command
-            .arg("rcs")
-            .arg(self.out_dir.join("librust_runtime.a"))
-            .arg(self.out_dir.join("rust_runtime.o"));
-        log::debug!("running {:?}", command);
-        command.status().unwrap();
+        let prepare = PrepareAction { verbose: self.verbose };
+        prepare.run(&self);
     }
 
     /// The path to the rustc codegen c library
@@ -70,5 +46,62 @@ impl Manifest {
             command.env("RUST_BACKTRACE", "full");
         }
         command
+    }
+}
+
+struct PrepareAction {
+    verbose: bool,
+}
+
+impl Run for PrepareAction {
+    const STEP_DISPLAY_NAME: &'static str = "prepare";
+
+    fn run(&self, manifest: &Manifest) {
+        // action: Build codegen backend
+        self.log_action_start("building", "codegen backend");
+        self.log_action_context("target", manifest.codegen_backend().display());
+
+        let mut command = Command::new("cargo");
+        command.arg("build").args(["--manifest-path", "crates/Cargo.toml"]);
+        if manifest.verbose {
+            command.args(["-v"]);
+        }
+        if manifest.release {
+            command.arg("--release");
+        }
+        self.command_status("build", &mut command);
+
+        // action: Build runtime library
+        self.log_action_start("building", "librust_runtime");
+        self.log_action_context("output dir", &manifest.out_dir.to_path_buf().display());
+
+        // cmd: Create output directory
+        if let Err(e) = std::fs::create_dir_all(&manifest.out_dir) {
+            cprintln!("       <r>failed</r> to create output directory: {}", e);
+            std::process::exit(1);
+        }
+
+        let cc = std::env::var("CC").unwrap_or("clang".to_string());
+
+        // cmd: Compile runtime.c
+        let mut command = Command::new(&cc);
+        command
+            .arg("rust_runtime/rust_runtime.c")
+            .arg("-o")
+            .arg(manifest.out_dir.join("rust_runtime.o"))
+            .arg("-c");
+        self.command_status("build", &mut command);
+
+        // cmd: Create static library
+        let mut command = Command::new("ar");
+        command
+            .arg("rcs")
+            .arg(manifest.out_dir.join("librust_runtime.a"))
+            .arg(manifest.out_dir.join("rust_runtime.o"));
+        self.command_status("archive", &mut command);
+    }
+
+    fn verbose(&self) -> bool {
+        self.verbose
     }
 }

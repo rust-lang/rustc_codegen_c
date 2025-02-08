@@ -15,11 +15,17 @@ use crate::Run;
 #[derive(Args, Debug)]
 pub struct TestCommand {
     /// Update the blessed output
-    #[clap(long)]
+    #[arg(long)]
     pub bless: bool,
+
+    /// Whether to show verbose output
+    #[arg(short, long)]
+    pub verbose: bool,
 }
 
 impl Run for TestCommand {
+    const STEP_DISPLAY_NAME: &'static str = "TEST";
+
     fn run(&self, manifest: &Manifest) {
         manifest.prepare();
 
@@ -27,39 +33,51 @@ impl Run for TestCommand {
             cprintln!("<r,s>Test failed</r,s>: {}", info);
         }));
 
-        cprintln!("<b>[TEST]</b> running cargo test");
+        // action: Run cargo test
+        self.log_action_start("running", "cargo test");
         let mut command = std::process::Command::new("cargo");
         command.args(["test", "--manifest-path", "crates/Cargo.toml"]);
-        log::debug!("running {:?}", command);
-        assert!(command.status().unwrap().success(), "failed to run {:?}", command);
+        self.command_status("cargo", &mut command);
 
         let testcases = self.collect_testcases(manifest);
-        cprintln!("<b>[TEST]</b> found {} testcases", testcases.len());
+        self.log_action_start(&format!("found {} testcases", testcases.len()), "");
+        testcases.iter().for_each(|t| self.log_action_context(t.test.as_str(), t.name.as_str()));
 
-        let filechecker = FileChecker::new();
+        let filechecker = FileChecker::new(self.verbose);
         for testcase in testcases {
             match testcase.test {
                 TestType::FileCheck => {
-                    cprint!("File checking {}...", testcase.name);
+                    self.log_action_start("TEST file checking", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build(manifest);
-                    filechecker.run(&testcase);
+                    filechecker.check_testcase(&testcase);
                 }
                 TestType::Bless => {
-                    cprint!("Blessing {}...", testcase.name);
+                    self.log_action_start("TEST Bless", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build(manifest);
                     bless(self.bless, &testcase);
                 }
                 TestType::Compile => {
-                    cprint!("Compiling {}...", testcase.name);
+                    self.log_action_start("TEST Compile", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build(manifest);
                 }
                 TestType::CompileLib => {
-                    cprint!("Compiling lib {}...", testcase.name);
+                    self.log_action_start("TEST CompileLib", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
                     testcase.build_lib(manifest);
                 }
             }
-            cprintln!("<g>OK</g>");
         }
+    }
+
+    fn verbose(&self) -> bool {
+        self.verbose
     }
 }
 
@@ -67,13 +85,16 @@ impl TestCommand {
     pub fn collect_testcases(&self, manifest: &Manifest) -> Vec<TestCase> {
         let mut tests = vec![];
 
+        let verbose = self.verbose;
+
         // Examples
         for case in glob("examples/*.rs").unwrap() {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
             let name = format!("examples/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("examples").join(filename);
-            tests.push(TestCase { name, source: case, output_file, test: TestType::Compile })
+            let testcase = TestCase::new(name, case, output_file, TestType::Compile, verbose);
+            tests.push(testcase);
         }
 
         // Codegen tests
@@ -82,7 +103,8 @@ impl TestCommand {
             let filename = case.file_stem().unwrap();
             let name = format!("codegen/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("tests/codegen").join(filename);
-            tests.push(TestCase { name, source: case, output_file, test: TestType::FileCheck })
+            let testcase = TestCase::new(name, case, output_file, TestType::FileCheck, verbose);
+            tests.push(testcase);
         }
 
         // Bless tests - the output should be the same as the last run
@@ -91,7 +113,8 @@ impl TestCommand {
             let filename = case.file_stem().unwrap();
             let name = format!("bless/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("tests/bless").join(filename);
-            tests.push(TestCase { name, source: case, output_file, test: TestType::Bless })
+            let testcase = TestCase::new(name, case, output_file, TestType::Bless, verbose);
+            tests.push(testcase);
         }
 
         // Collect test-auxiliary
@@ -105,7 +128,9 @@ impl TestCommand {
                 let filename = source.file_stem().unwrap();
                 let name = format!("auxiliary/{}", filename.to_string_lossy());
                 let output_file = manifest.out_dir.join(filename); // aux files are output to the base directory
-                auxiliary.push(TestCase { name, source, output_file, test: TestType::CompileLib })
+                let testcase =
+                    TestCase::new(name, source, output_file, TestType::CompileLib, verbose);
+                auxiliary.push(testcase);
             }
         }
 
@@ -116,6 +141,7 @@ impl TestCommand {
     }
 }
 
+#[derive(Debug)]
 pub enum TestType {
     /// Test an executable can be compiled
     Compile,
@@ -126,15 +152,47 @@ pub enum TestType {
     /// Bless test - the output should be the same as the last run
     Bless,
 }
+impl TestType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TestType::Compile => "compile",
+            TestType::CompileLib => "compile-lib",
+            TestType::FileCheck => "filecheck",
+            TestType::Bless => "bless",
+        }
+    }
+}
 
 pub struct TestCase {
     pub name: String,
     pub source: PathBuf,
     pub output_file: PathBuf,
     pub test: TestType,
+    pub verbose: bool,
+}
+
+impl Run for TestCase {
+    const STEP_DISPLAY_NAME: &'static str = "TESTCASE";
+    fn run(&self, manifest: &Manifest) {
+        self.build(manifest);
+    }
+
+    fn verbose(&self) -> bool {
+        self.verbose
+    }
 }
 
 impl TestCase {
+    pub fn new(
+        name: String,
+        source: PathBuf,
+        output_file: PathBuf,
+        test: TestType,
+        verbose: bool,
+    ) -> Self {
+        Self { name, source, output_file, test, verbose }
+    }
+
     pub fn build(&self, manifest: &Manifest) {
         let output_dir = self.output_file.parent().unwrap();
         std::fs::create_dir_all(output_dir).unwrap();
@@ -145,8 +203,7 @@ impl TestCase {
             .arg(&self.source)
             .arg("-o")
             .arg(&self.output_file);
-        log::debug!("running {:?}", command);
-        command.status().unwrap();
+        self.command_status("compile", &mut command);
     }
 
     pub fn build_lib(&self, manifest: &Manifest) {
@@ -157,10 +214,9 @@ impl TestCase {
             .args(["--crate-type", "lib"])
             .arg("-O")
             .arg(&self.source)
-            .arg("--out-dir") // we use `--out-dir` to integrate with the default name convention
-            .arg(output_dir); // so here we ignore the filename and just use the directory
-        log::debug!("running {:?}", command);
-        command.status().unwrap();
+            .arg("--out-dir")
+            .arg(output_dir);
+        self.command_status("compile lib", &mut command);
     }
 
     /// Get the generated C file f
@@ -182,10 +238,21 @@ impl TestCase {
 
 struct FileChecker {
     filecheck: PathBuf,
+    verbose: bool,
+}
+
+impl Run for FileChecker {
+    const STEP_DISPLAY_NAME: &'static str = "FILECHECK";
+
+    fn run(&self, _manifest: &Manifest) {}
+
+    fn verbose(&self) -> bool {
+        self.verbose
+    }
 }
 
 impl FileChecker {
-    pub fn new() -> Self {
+    pub fn new(verbose: bool) -> Self {
         let filecheck = [
             "FileCheck-18",
             "FileCheck-17",
@@ -198,15 +265,14 @@ impl FileChecker {
         .find_map(|filecheck| which(filecheck).ok())
         .expect("`FileCheck` not found");
 
-        Self { filecheck }
+        Self { filecheck, verbose }
     }
 
-    fn run(&self, case: &TestCase) {
+    fn check_testcase(&self, case: &TestCase) {
         let generated = File::open(case.generated()).unwrap();
         let mut command = std::process::Command::new(&self.filecheck);
         command.arg(&case.source).stdin(generated);
-        log::debug!("running {:?}", command);
-        let output = command.output().unwrap();
+        let output = self.command_output("filecheck", &mut command);
         assert!(
             output.status.success(),
             "failed to run FileCheck on {}",
