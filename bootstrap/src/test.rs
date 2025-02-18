@@ -83,7 +83,7 @@ impl Run for TestCommand {
 
 impl TestCommand {
     pub fn collect_testcases(&self, manifest: &Manifest) -> Vec<TestCase> {
-        let mut tests = vec![];
+        let mut cases = vec![];
 
         let verbose = self.verbose;
 
@@ -94,7 +94,7 @@ impl TestCommand {
             let name = format!("examples/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("examples").join(filename);
             let testcase = TestCase::new(name, case, output_file, TestType::Compile, verbose);
-            tests.push(testcase);
+            cases.push(testcase);
         }
 
         // Codegen tests
@@ -104,7 +104,7 @@ impl TestCommand {
             let name = format!("codegen/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("tests/codegen").join(filename);
             let testcase = TestCase::new(name, case, output_file, TestType::FileCheck, verbose);
-            tests.push(testcase);
+            cases.push(testcase);
         }
 
         // Bless tests - the output should be the same as the last run
@@ -114,30 +114,36 @@ impl TestCommand {
             let name = format!("bless/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("tests/bless").join(filename);
             let testcase = TestCase::new(name, case, output_file, TestType::Bless, verbose);
-            tests.push(testcase);
+            cases.push(testcase);
         }
 
         // Collect test-auxiliary
-        let aux_use = regex::Regex::new(r"^//@\s*aux-build:(?P<fname>.*)").unwrap();
-        let mut auxiliary = vec![];
-        for case in tests.iter() {
-            let source = std::fs::read_to_string(&case.source).unwrap();
-            for cap in aux_use.captures_iter(&source) {
+        let aux_use = regex::Regex::new(r"\s*//@\s*aux-build:(?P<fname>.*)").unwrap();
+        let mut auxiliaries = vec![];
+        for case in cases.iter() {
+            let content = std::fs::read_to_string(&case.source).unwrap();
+            for cap in aux_use.captures_iter(&content) {
                 let fname = cap.name("fname").unwrap().as_str();
                 let source = Path::new("tests/auxiliary").join(fname);
                 let filename = source.file_stem().unwrap();
                 let name = format!("auxiliary/{}", filename.to_string_lossy());
+
+                // deduplication
+                if auxiliaries.iter().any(|aux: &TestCase| aux.name == name) {
+                    continue;
+                }
+
                 let output_file = manifest.out_dir.join(filename); // aux files are output to the base directory
                 let testcase =
                     TestCase::new(name, source, output_file, TestType::CompileLib, verbose);
-                auxiliary.push(testcase);
+                auxiliaries.push(testcase);
             }
         }
 
         // Compile auxiliary before the tests
-        let mut cases = auxiliary;
-        cases.extend(tests);
-        cases
+        let mut testcases = auxiliaries;
+        testcases.extend(cases);
+        testcases
     }
 }
 
