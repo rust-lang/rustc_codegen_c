@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 
+use rustc_codegen_c_ast::expr::CValue;
 use rustc_codegen_ssa::traits::MiscMethods;
 use rustc_hash::FxHashMap;
 use rustc_middle::mir::mono::CodegenUnit;
@@ -19,7 +20,11 @@ impl<'tcx, 'mx> MiscMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     }
 
     fn get_fn_addr(&self, instance: Instance<'tcx>) -> Self::Value {
-        todo!()
+        let funcs = self.mcx.module().funcs.borrow();
+        let path = self.tcx.def_path_debug_str(instance.def_id());
+        let name = path.split("::").last().unwrap();
+        let func = funcs.iter().find(|f| f.0.name == name).unwrap();
+        CValue::Func(func.0.name)
     }
 
     fn eh_personality(&self) -> Self::Value {

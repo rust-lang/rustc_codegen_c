@@ -3,6 +3,7 @@
 use std::ops::Deref;
 
 use rustc_abi::{HasDataLayout, TargetDataLayout};
+use rustc_codegen_c_ast::expr::{CExpr, CValue};
 use rustc_codegen_c_ast::func::CFunc;
 use rustc_codegen_ssa::traits::{BackendTypes, BuilderMethods, HasCodegen};
 use rustc_middle::ty::layout::{
@@ -714,7 +715,19 @@ impl<'a, 'tcx, 'mx> BuilderMethods<'a, 'tcx> for Builder<'a, 'tcx, 'mx> {
         funclet: Option<&Self::Funclet>,
         instance: Option<rustc_middle::ty::Instance<'tcx>>,
     ) -> Self::Value {
-        todo!()
+        use crate::rustc_codegen_ssa::traits::LayoutTypeMethods;
+
+        let fn_abi = fn_abi.unwrap();
+        let ret_ty = self.cx.immediate_backend_type(fn_abi.ret.layout);
+
+        let args = args.iter().map(|v| self.mcx.value(*v)).collect();
+
+        let call = self.mcx.call(self.mcx.value(llfn), args);
+        let ret = self.bb.0.next_local_var();
+
+        self.bb.0.push_stmt(self.mcx.decl_stmt(self.mcx.var(ret, ret_ty, Some(call))));
+
+        ret
     }
 
     fn zext(&mut self, val: Self::Value, dest_ty: Self::Type) -> Self::Value {

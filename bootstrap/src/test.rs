@@ -58,7 +58,7 @@ impl Run for TestCommand {
                     self.log_action_context("source", &testcase.source.display());
                     self.log_action_context("output", &testcase.output_file.display());
                     testcase.build(manifest);
-                    bless(self.bless, &testcase);
+                    self.bless(self.bless, &testcase);
                 }
                 TestType::Compile => {
                     self.log_action_start("TEST Compile", &testcase.name);
@@ -72,6 +72,13 @@ impl Run for TestCommand {
                     self.log_action_context("output", &testcase.output_file.display());
                     testcase.build_lib(manifest);
                 }
+                TestType::Runtime => {
+                    self.log_action_start("TEST Runtime", &testcase.name);
+                    self.log_action_context("source", &testcase.source.display());
+                    self.log_action_context("output", &testcase.output_file.display());
+                    testcase.build(manifest);
+                    self.run_and_check_output(&testcase);
+                }
             }
         }
     }
@@ -84,7 +91,6 @@ impl Run for TestCommand {
 impl TestCommand {
     pub fn collect_testcases(&self, manifest: &Manifest) -> Vec<TestCase> {
         let mut cases = vec![];
-
         let verbose = self.verbose;
 
         // Examples
@@ -117,6 +123,20 @@ impl TestCommand {
             cases.push(testcase);
         }
 
+        // Runtime tests - compile, run and compare output
+        for case in glob("tests/runit/*.rs").unwrap() {
+            let case = case.unwrap();
+            let filename = case.file_stem().unwrap();
+            // Skip the test runner
+            if filename == "runner" {
+                continue;
+            }
+            let name = format!("runit/{}", filename.to_string_lossy());
+            let output_file = manifest.out_dir.join("tests/runit").join(filename);
+            let testcase = TestCase::new(name, case, output_file, TestType::Runtime, verbose);
+            cases.push(testcase);
+        }
+
         // Collect test-auxiliary
         let aux_use = regex::Regex::new(r"\s*//@\s*aux-build:(?P<fname>.*)").unwrap();
         let mut auxiliaries = vec![];
@@ -145,6 +165,134 @@ impl TestCommand {
         testcases.extend(cases);
         testcases
     }
+
+    fn bless(&self, update: bool, case: &TestCase) {
+        let output = case.generated();
+        let blessed = case.source.with_extension("c");
+
+        self.log_action_context("checking", &blessed.display());
+        if update {
+            self.log_action_context("updating", &blessed.display());
+            std::fs::copy(output, &blessed).unwrap();
+            self.log_action_context("result", "updated");
+        } else {
+            let output = std::fs::read_to_string(output).unwrap();
+            let blessed = std::fs::read_to_string(&blessed).unwrap();
+
+            let diff = TextDiff::from_lines(&blessed, &output);
+            if diff.ratio() < 1.0 {
+                cprintln!("<r,s>output does not match blessed output</r,s>");
+                for change in diff.iter_all_changes() {
+                    let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                    match change.tag() {
+                        ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                        ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                        ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                    }
+                }
+                std::process::exit(1);
+            }
+            self.log_action_context("result", "passed");
+        }
+    }
+
+    /// Run a runtime test and compare its output with the expected output
+    fn run_and_check_output(&self, testcase: &TestCase) {
+        // Run the test
+        self.log_action_context("running", &testcase.output_file.display());
+        let output = std::process::Command::new(&testcase.output_file)
+            .output()
+            .unwrap_or_else(|e| panic!("failed to run {}: {}", testcase.output_file.display(), e));
+
+        // Check return value
+        let actual_return = output.status.code().unwrap_or_else(|| {
+            panic!("Process terminated by signal: {}", testcase.output_file.display())
+        });
+
+        let expected_return_path = testcase.source.with_extension("ret");
+        if expected_return_path.exists() {
+            self.log_action_context("checking return value", &expected_return_path.display());
+            let expected_return = std::fs::read_to_string(&expected_return_path)
+                .unwrap_or_else(|e| {
+                    panic!("failed to read {}: {}", expected_return_path.display(), e)
+                })
+                .trim()
+                .parse::<i32>()
+                .unwrap_or_else(|e| {
+                    panic!("invalid return value in {}: {}", expected_return_path.display(), e)
+                });
+
+            if actual_return != expected_return {
+                cprintln!("<r,s>return value does not match expected value</r,s>");
+                cprintln!("expected: {}", expected_return);
+                cprintln!("actual: {}", actual_return);
+                std::process::exit(1);
+            }
+            self.log_action_context("return value", "passed");
+        }
+
+        // Check stdout
+        let actual_output = String::from_utf8_lossy(&output.stdout).into_owned();
+        let expected_output_path = testcase.source.with_extension("out");
+
+        if !expected_output_path.exists() {
+            panic!("expected output file {} does not exist", expected_output_path.display());
+        }
+
+        self.log_action_context("checking stdout", &expected_output_path.display());
+        let expected_output = std::fs::read_to_string(&expected_output_path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {}", expected_output_path.display(), e));
+
+        let diff = TextDiff::from_lines(&expected_output, &actual_output);
+        if diff.ratio() < 1.0 {
+            cprintln!("<r,s>stdout does not match expected output</r,s>");
+            for change in diff.iter_all_changes() {
+                let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                match change.tag() {
+                    ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                    ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                    ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                }
+            }
+            std::process::exit(1);
+        }
+        self.log_action_context("stdout", "passed");
+
+        // Check stderr if there's any output
+        if !output.stderr.is_empty() {
+            let stderr_str = String::from_utf8_lossy(&output.stderr).into_owned();
+            let expected_stderr_path = testcase.source.with_extension("err");
+
+            if expected_stderr_path.exists() {
+                self.log_action_context("checking stderr", &expected_stderr_path.display());
+                let expected_stderr = std::fs::read_to_string(&expected_stderr_path)
+                    .unwrap_or_else(|e| {
+                        panic!("failed to read {}: {}", expected_stderr_path.display(), e)
+                    });
+
+                let diff = TextDiff::from_lines(&expected_stderr, &stderr_str);
+                if diff.ratio() < 1.0 {
+                    cprintln!("<r,s>stderr does not match expected output</r,s>");
+                    for change in diff.iter_all_changes() {
+                        let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                        match change.tag() {
+                            ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                            ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                            ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                        }
+                    }
+                    std::process::exit(1);
+                }
+                self.log_action_context("stderr", "passed");
+            } else if !stderr_str.trim().is_empty() {
+                // If there's no .err file but we got stderr output, that's unexpected
+                cprintln!("<r,s>unexpected stderr output:</r,s>");
+                cprintln!("{}", stderr_str);
+                std::process::exit(1);
+            }
+        }
+        self.log_action_context("result", "all checks passed");
+    }
 }
 
 #[derive(Debug)]
@@ -157,7 +305,10 @@ pub enum TestType {
     FileCheck,
     /// Bless test - the output should be the same as the last run
     Bless,
+    /// Runtime test - compile, run and compare output
+    Runtime,
 }
+
 impl TestType {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -165,6 +316,7 @@ impl TestType {
             TestType::CompileLib => "compile-lib",
             TestType::FileCheck => "filecheck",
             TestType::Bless => "bless",
+            TestType::Runtime => "runtime",
         }
     }
 }
@@ -284,30 +436,5 @@ impl FileChecker {
             "failed to run FileCheck on {}",
             case.source.file_stem().unwrap().to_string_lossy()
         );
-    }
-}
-
-fn bless(update: bool, case: &TestCase) {
-    let output = case.generated();
-    let blessed = case.source.with_extension("c");
-    if update {
-        std::fs::copy(output, blessed).unwrap();
-    } else {
-        let output = std::fs::read_to_string(output).unwrap();
-        let blessed = std::fs::read_to_string(blessed).unwrap();
-
-        let diff = TextDiff::from_lines(&blessed, &output);
-        if diff.ratio() < 1.0 {
-            cprintln!("<r,s>output does not match blessed output</r,s>");
-            for change in diff.iter_all_changes() {
-                let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
-                match change.tag() {
-                    ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
-                    ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
-                    ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
-                }
-            }
-            std::process::exit(1);
-        }
     }
 }

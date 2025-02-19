@@ -77,7 +77,7 @@ trait Run {
                 output
             }
             // Command ran but did not complete
-            Ok(output) => panic!("command failed: {output:?}"),
+            Ok(output) => panic!("command failed: {}", String::from_utf8_lossy(&output.stderr)),
             Err(e) => panic!("command failed: {e:?}"),
         }
     }
