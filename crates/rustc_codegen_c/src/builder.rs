@@ -3,7 +3,6 @@
 use std::ops::Deref;
 
 use rustc_abi::{HasDataLayout, TargetDataLayout};
-use rustc_codegen_c_ast::expr::{CExpr, CValue};
 use rustc_codegen_c_ast::func::CFunc;
 use rustc_codegen_ssa::traits::{BackendTypes, BuilderMethods, HasCodegen};
 use rustc_middle::ty::layout::{

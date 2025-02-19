@@ -237,7 +237,7 @@ pub(crate) fn print_declarator(mut ty: CTy, val: Option<CValue>, ctx: &mut Print
                     ctx.word("*");
                 }
                 DeclaratorPart::ArrayDim(dim) => {
-                    ctx.word(format!("[{}]", dim.to_string()));
+                    ctx.word(format!("[{}]", dim));
                 }
                 DeclaratorPart::Lp => ctx.word("("),
                 DeclaratorPart::Rp => ctx.word(")"),
