@@ -23,3 +23,6 @@ pub fn single(a: i32) -> i32 {
 pub fn main() -> i32 {
     single(1)
 }
+
+//@ check-stdout:
+//@ exit-code: 1

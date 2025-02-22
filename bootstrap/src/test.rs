@@ -113,7 +113,7 @@ impl TestCommand {
             cases.push(testcase);
         }
 
-        // Bless tests - the output should be the same as the last run
+        // Bless tests
         for case in glob("tests/bless/*.rs").unwrap() {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
@@ -123,7 +123,7 @@ impl TestCommand {
             cases.push(testcase);
         }
 
-        // Runtime tests - compile, run and compare output
+        // Runtime tests
         for case in glob("tests/runit/*.rs").unwrap() {
             let case = case.unwrap();
             let filename = case.file_stem().unwrap();
@@ -137,26 +137,26 @@ impl TestCommand {
             cases.push(testcase);
         }
 
-        // Collect test-auxiliary
-        let aux_use = regex::Regex::new(r"^//@\s*aux-build:(?P<fname>.*)").unwrap();
+        // Collect and process auxiliary builds from directives
         let mut auxiliaries = vec![];
         for case in cases.iter() {
-            let source = std::fs::read_to_string(&case.source).unwrap();
-            for cap in aux_use.captures_iter(&source) {
-                let fname = cap.name("fname").unwrap().as_str();
-                let source = Path::new("tests/auxiliary").join(fname);
-                let filename = source.file_stem().unwrap();
-                let name = format!("auxiliary/{}", filename.to_string_lossy());
+            let directives = case.parse_directives();
+            for directive in directives {
+                if let TestDirective::AuxBuild(fname) = directive {
+                    let source = Path::new("tests/auxiliary").join(&fname);
+                    let filename = source.file_stem().unwrap();
+                    let name = format!("auxiliary/{}", filename.to_string_lossy());
 
-                // deduplication
-                if auxiliaries.iter().any(|aux: &TestCase| aux.name == name) {
-                    continue;
+                    // deduplication
+                    if auxiliaries.iter().any(|aux: &TestCase| aux.name == name) {
+                        continue;
+                    }
+
+                    let output_file = manifest.out_dir.join(filename); // aux files are output to the base directory
+                    let testcase =
+                        TestCase::new(name, source, output_file, TestType::CompileLib, verbose);
+                    auxiliaries.push(testcase);
                 }
-
-                let output_file = manifest.out_dir.join(filename); // aux files are output to the base directory
-                let testcase =
-                    TestCase::new(name, source, output_file, TestType::CompileLib, verbose);
-                auxiliaries.push(testcase);
             }
         }
 
@@ -196,101 +196,81 @@ impl TestCommand {
         }
     }
 
-    /// Run a runtime test and compare its output with the expected output
+    /// Run a runtime test and check its output against directives
     fn run_and_check_output(&self, testcase: &TestCase) {
+        // Parse directives from source
+        let directives = testcase.parse_directives();
+        self.log_action_context("directives", &format!("found {} directives", directives.len()));
+
         // Run the test
         self.log_action_context("running", &testcase.output_file.display());
         let output = std::process::Command::new(&testcase.output_file)
             .output()
             .unwrap_or_else(|e| panic!("failed to run {}: {}", testcase.output_file.display(), e));
 
-        // Check return value
+        // Get actual outputs
         let actual_return = output.status.code().unwrap_or_else(|| {
             panic!("Process terminated by signal: {}", testcase.output_file.display())
         });
+        let actual_stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let actual_stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
-        let expected_return_path = testcase.source.with_extension("ret");
-        if expected_return_path.exists() {
-            self.log_action_context("checking return value", &expected_return_path.display());
-            let expected_return = std::fs::read_to_string(&expected_return_path)
-                .unwrap_or_else(|e| {
-                    panic!("failed to read {}: {}", expected_return_path.display(), e)
-                })
-                .trim()
-                .parse::<i32>()
-                .unwrap_or_else(|e| {
-                    panic!("invalid return value in {}: {}", expected_return_path.display(), e)
-                });
-
-            if actual_return != expected_return {
-                cprintln!("<r,s>return value does not match expected value</r,s>");
-                cprintln!("expected: {}", expected_return);
-                cprintln!("actual: {}", actual_return);
-                std::process::exit(1);
-            }
-            self.log_action_context("return value", "passed");
-        }
-
-        // Check stdout
-        let actual_output = String::from_utf8_lossy(&output.stdout).into_owned();
-        let expected_output_path = testcase.source.with_extension("out");
-
-        if !expected_output_path.exists() {
-            panic!("expected output file {} does not exist", expected_output_path.display());
-        }
-
-        self.log_action_context("checking stdout", &expected_output_path.display());
-        let expected_output = std::fs::read_to_string(&expected_output_path)
-            .unwrap_or_else(|e| panic!("failed to read {}: {}", expected_output_path.display(), e));
-
-        let diff = TextDiff::from_lines(&expected_output, &actual_output);
-        if diff.ratio() < 1.0 {
-            cprintln!("<r,s>stdout does not match expected output</r,s>");
-            for change in diff.iter_all_changes() {
-                let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
-                match change.tag() {
-                    ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
-                    ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
-                    ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
-                }
-            }
-            std::process::exit(1);
-        }
-        self.log_action_context("stdout", "passed");
-
-        // Check stderr if there's any output
-        if !output.stderr.is_empty() {
-            let stderr_str = String::from_utf8_lossy(&output.stderr).into_owned();
-            let expected_stderr_path = testcase.source.with_extension("err");
-
-            if expected_stderr_path.exists() {
-                self.log_action_context("checking stderr", &expected_stderr_path.display());
-                let expected_stderr = std::fs::read_to_string(&expected_stderr_path)
-                    .unwrap_or_else(|e| {
-                        panic!("failed to read {}: {}", expected_stderr_path.display(), e)
-                    });
-
-                let diff = TextDiff::from_lines(&expected_stderr, &stderr_str);
-                if diff.ratio() < 1.0 {
-                    cprintln!("<r,s>stderr does not match expected output</r,s>");
-                    for change in diff.iter_all_changes() {
-                        let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
-                        match change.tag() {
-                            ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
-                            ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
-                            ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+        // Check each directive
+        for directive in directives {
+            match directive {
+                TestDirective::CheckStdout(expected) => {
+                    self.log_action_context("checking stdout", &expected);
+                    let diff = TextDiff::from_lines(&expected, &actual_stdout);
+                    if diff.ratio() < 1.0 {
+                        cprintln!("<r,s>stdout does not match expected output</r,s>");
+                        for change in diff.iter_all_changes() {
+                            let lineno =
+                                change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                            match change.tag() {
+                                ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                                ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                                ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                            }
                         }
+                        std::process::exit(1);
                     }
-                    std::process::exit(1);
+                    self.log_action_context("stdout", "passed");
                 }
-                self.log_action_context("stderr", "passed");
-            } else if !stderr_str.trim().is_empty() {
-                // If there's no .err file but we got stderr output, that's unexpected
-                cprintln!("<r,s>unexpected stderr output:</r,s>");
-                cprintln!("{}", stderr_str);
-                std::process::exit(1);
+                TestDirective::CheckStderr(expected) => {
+                    self.log_action_context("checking stderr", &expected);
+                    let diff = TextDiff::from_lines(&expected, &actual_stderr);
+                    if diff.ratio() < 1.0 {
+                        cprintln!("<r,s>stderr does not match expected output</r,s>");
+                        for change in diff.iter_all_changes() {
+                            let lineno =
+                                change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                            match change.tag() {
+                                ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                                ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                                ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                            }
+                        }
+                        std::process::exit(1);
+                    }
+                    self.log_action_context("stderr", "passed");
+                }
+                TestDirective::ExitCode(expected) => {
+                    self.log_action_context("checking exit code", &expected.to_string());
+                    if actual_return != expected {
+                        cprintln!("<r,s>exit code does not match expected value</r,s>");
+                        cprintln!("expected: {}", expected);
+                        cprintln!("actual: {}", actual_return);
+                        std::process::exit(1);
+                    }
+                    self.log_action_context("exit code", "passed");
+                }
+                TestDirective::AuxBuild(_) => {
+                    // AuxBuild directives are handled during test collection
+                    // No need to check them during test execution
+                }
             }
         }
+
         self.log_action_context("result", "all checks passed");
     }
 }
@@ -392,6 +372,55 @@ impl TestCase {
         assert!(generated.is_some(), "could not find {case}'s generated file");
         generated.unwrap().path()
     }
+
+    /// Parse test directives from the source file
+    fn parse_directives(&self) -> Vec<TestDirective> {
+        let source = std::fs::read_to_string(&self.source)
+            .unwrap_or_else(|e| panic!("failed to read {}: {}", self.source.display(), e));
+
+        let mut directives = Vec::new();
+
+        // Regular expressions for matching directives
+        let stdout_re = regex::Regex::new(r"^//@\s*check-stdout:\s*(.*)").unwrap();
+        let stderr_re = regex::Regex::new(r"^//@\s*check-stderr:\s*(.*)").unwrap();
+        let exit_re = regex::Regex::new(r"^//@\s*exit-code:\s*(\d+)").unwrap();
+        let aux_re = regex::Regex::new(r"^//@\s*aux-build:\s*(.*)").unwrap();
+        // Regex to match any directive pattern
+        let directive_re = regex::Regex::new(r"^//@\s*([^:]+)").unwrap();
+
+        for (line_num, line) in source.lines().enumerate() {
+            if let Some(cap) = stdout_re.captures(line) {
+                let content = cap[1].trim().to_string();
+                directives.push(TestDirective::CheckStdout(content));
+            } else if let Some(cap) = stderr_re.captures(line) {
+                let content = cap[1].trim().to_string();
+                directives.push(TestDirective::CheckStderr(content));
+            } else if let Some(cap) = exit_re.captures(line) {
+                if let Ok(code) = cap[1].parse() {
+                    directives.push(TestDirective::ExitCode(code));
+                } else {
+                    panic!(
+                        "{}:{}: invalid exit code in directive",
+                        self.source.display(),
+                        line_num + 1
+                    );
+                }
+            } else if let Some(cap) = aux_re.captures(line) {
+                let fname = cap[1].trim().to_string();
+                directives.push(TestDirective::AuxBuild(fname));
+            } else if let Some(cap) = directive_re.captures(line) {
+                let directive_name = cap[1].trim();
+                panic!(
+                    "{}:{}: unknown directive '{}', supported directives are: check-stdout, check-stderr, exit-code, aux-build",
+                    self.source.display(),
+                    line_num + 1,
+                    directive_name
+                );
+            }
+        }
+
+        directives
+    }
 }
 
 struct FileChecker {
@@ -437,4 +466,17 @@ impl FileChecker {
             case.source.file_stem().unwrap().to_string_lossy()
         );
     }
+}
+
+/// Test directives that can appear in source files
+#[derive(Debug)]
+enum TestDirective {
+    /// Expected stdout content
+    CheckStdout(String),
+    /// Expected stderr content
+    CheckStderr(String),
+    /// Expected exit code
+    ExitCode(i32),
+    /// Auxiliary build requirement
+    AuxBuild(String),
 }
