@@ -118,11 +118,12 @@ impl TestCommand {
         }
 
         // Collect test-auxiliary
-        let aux_use = regex::Regex::new(r"\s*//@\s*aux-build:(?P<fname>.*)").unwrap();
+        let aux_use = regex::Regex::new(r"(?m)//@\s*aux-build:(?P<fname>.*)").unwrap();
         let mut auxiliaries = vec![];
         for case in cases.iter() {
             let content = std::fs::read_to_string(&case.source).unwrap();
             for cap in aux_use.captures_iter(&content) {
+                println!("{:?}", case.source);
                 let fname = cap.name("fname").unwrap().as_str();
                 let source = Path::new("tests/auxiliary").join(fname);
                 let filename = source.file_stem().unwrap();
