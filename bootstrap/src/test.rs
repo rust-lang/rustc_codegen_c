@@ -72,14 +72,8 @@ impl Run for TestCommand {
                     self.log_action_context("output", &testcase.output_file.display());
                     testcase.build_lib(manifest);
                 }
-                TestType::Runtime => {
-                    self.log_action_start("TEST Runtime", &testcase.name);
-                    self.log_action_context("source", &testcase.source.display());
-                    self.log_action_context("output", &testcase.output_file.display());
-                    testcase.build(manifest);
-                    self.run_and_check_output(&testcase);
-                }
             }
+            self.check_and_run_directives(&testcase);
         }
     }
 
@@ -120,20 +114,6 @@ impl TestCommand {
             let name = format!("bless/{}", filename.to_string_lossy());
             let output_file = manifest.out_dir.join("tests/bless").join(filename);
             let testcase = TestCase::new(name, case, output_file, TestType::Bless, verbose);
-            cases.push(testcase);
-        }
-
-        // Runtime tests
-        for case in glob("tests/runit/*.rs").unwrap() {
-            let case = case.unwrap();
-            let filename = case.file_stem().unwrap();
-            // Skip the test runner
-            if filename == "runner" {
-                continue;
-            }
-            let name = format!("runit/{}", filename.to_string_lossy());
-            let output_file = manifest.out_dir.join("tests/runit").join(filename);
-            let testcase = TestCase::new(name, case, output_file, TestType::Runtime, verbose);
             cases.push(testcase);
         }
 
@@ -197,11 +177,48 @@ impl TestCommand {
     }
 
     /// Run a runtime test and check its output against directives
-    fn run_and_check_output(&self, testcase: &TestCase) {
+    fn check_and_run_directives(&self, testcase: &TestCase) {
         // Parse directives from source
         let directives = testcase.parse_directives();
         self.log_action_context("directives", &format!("found {} directives", directives.len()));
 
+        let mut runpass = false;
+        let mut exitcode = None;
+        let mut stdout = None;
+        let mut stderr = None;
+
+        // Check each directive
+        for directive in directives {
+            match directive {
+                TestDirective::RunPass => runpass = true,
+                TestDirective::CheckStdout(expected) => stdout = Some(expected),
+                TestDirective::CheckStderr(expected) => stderr = Some(expected),
+                TestDirective::ExitCode(expected) => exitcode = Some(expected),
+                TestDirective::AuxBuild(_) => {
+                    // AuxBuild directives are handled during test collection
+                    // No need to check them during test execution
+                }
+            }
+        }
+
+        if !runpass && (exitcode.is_some() | stdout.is_some() | stderr.is_some()) {
+            panic!("Directives conflicts, lack of '//@ run-pass'");
+        }
+
+        if runpass {
+            self.run_and_check_output(testcase, exitcode, stdout, stderr);
+        }
+
+        self.log_action_context("result", "all checks passed");
+    }
+
+    fn run_and_check_output(
+        &self,
+        testcase: &TestCase,
+        expected_exit: Option<i32>,
+        expected_stdout: Option<String>,
+        expected_stderr: Option<String>,
+    ) {
         // Run the test
         self.log_action_context("running", &testcase.output_file.display());
         let output = std::process::Command::new(&testcase.output_file)
@@ -215,63 +232,53 @@ impl TestCommand {
         let actual_stdout = String::from_utf8_lossy(&output.stdout).into_owned();
         let actual_stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
-        // Check each directive
-        for directive in directives {
-            match directive {
-                TestDirective::CheckStdout(expected) => {
-                    self.log_action_context("checking stdout", &expected);
-                    let diff = TextDiff::from_lines(&expected, &actual_stdout);
-                    if diff.ratio() < 1.0 {
-                        cprintln!("<r,s>stdout does not match expected output</r,s>");
-                        for change in diff.iter_all_changes() {
-                            let lineno =
-                                change.old_index().unwrap_or(change.new_index().unwrap_or(0));
-                            match change.tag() {
-                                ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
-                                ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
-                                ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
-                            }
-                        }
-                        std::process::exit(1);
-                    }
-                    self.log_action_context("stdout", "passed");
-                }
-                TestDirective::CheckStderr(expected) => {
-                    self.log_action_context("checking stderr", &expected);
-                    let diff = TextDiff::from_lines(&expected, &actual_stderr);
-                    if diff.ratio() < 1.0 {
-                        cprintln!("<r,s>stderr does not match expected output</r,s>");
-                        for change in diff.iter_all_changes() {
-                            let lineno =
-                                change.old_index().unwrap_or(change.new_index().unwrap_or(0));
-                            match change.tag() {
-                                ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
-                                ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
-                                ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
-                            }
-                        }
-                        std::process::exit(1);
-                    }
-                    self.log_action_context("stderr", "passed");
-                }
-                TestDirective::ExitCode(expected) => {
-                    self.log_action_context("checking exit code", &expected.to_string());
-                    if actual_return != expected {
-                        cprintln!("<r,s>exit code does not match expected value</r,s>");
-                        cprintln!("expected: {}", expected);
-                        cprintln!("actual: {}", actual_return);
-                        std::process::exit(1);
-                    }
-                    self.log_action_context("exit code", "passed");
-                }
-                TestDirective::AuxBuild(_) => {
-                    // AuxBuild directives are handled during test collection
-                    // No need to check them during test execution
-                }
+        {
+            let expected_exit = expected_exit.unwrap_or(0);
+            self.log_action_context("checking exit code", &expected_exit.to_string());
+            if actual_return != expected_exit {
+                cprintln!("<r,s>exit code does not match expected value</r,s>");
+                cprintln!("expected: {}", expected_exit);
+                cprintln!("actual: {}", actual_return);
+                std::process::exit(1);
             }
+            self.log_action_context("exit code", "passed");
         }
 
-        self.log_action_context("result", "all checks passed");
+        if let Some(expected_stdout) = expected_stdout {
+            self.log_action_context("checking stdout", &expected_stdout);
+            let diff = TextDiff::from_lines(&expected_stdout, &actual_stdout);
+            if diff.ratio() < 1.0 {
+                cprintln!("<r,s>stdout does not match expected output</r,s>");
+                for change in diff.iter_all_changes() {
+                    let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                    match change.tag() {
+                        ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                        ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                        ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                    }
+                }
+                std::process::exit(1);
+            }
+            self.log_action_context("stdout", "passed");
+        }
+
+        if let Some(expected_stderr) = expected_stderr {
+            self.log_action_context("checking stderr", &expected_stderr);
+            let diff = TextDiff::from_lines(&expected_stderr, &actual_stderr);
+            if diff.ratio() < 1.0 {
+                cprintln!("<r,s>stderr does not match expected output</r,s>");
+                for change in diff.iter_all_changes() {
+                    let lineno = change.old_index().unwrap_or(change.new_index().unwrap_or(0));
+                    match change.tag() {
+                        ChangeTag::Equal => print!(" {:4}| {}", lineno, change),
+                        ChangeTag::Insert => cprint!("<g>+{:4}| {}</g>", lineno, change),
+                        ChangeTag::Delete => cprint!("<r>-{:4}| {}</r>", lineno, change),
+                    }
+                }
+                std::process::exit(1);
+            }
+            self.log_action_context("stderr", "passed");
+        }
     }
 }
 
@@ -285,8 +292,6 @@ pub enum TestType {
     FileCheck,
     /// Bless test - the output should be the same as the last run
     Bless,
-    /// Runtime test - compile, run and compare output
-    Runtime,
 }
 
 impl TestType {
@@ -296,7 +301,6 @@ impl TestType {
             TestType::CompileLib => "compile-lib",
             TestType::FileCheck => "filecheck",
             TestType::Bless => "bless",
-            TestType::Runtime => "runtime",
         }
     }
 }
@@ -381,6 +385,7 @@ impl TestCase {
         let mut directives = Vec::new();
 
         // Regular expressions for matching directives
+        let run_pass = regex::Regex::new(r"^//@\s*run-pass").unwrap();
         let stdout_re = regex::Regex::new(r"^//@\s*check-stdout:\s*(.*)").unwrap();
         let stderr_re = regex::Regex::new(r"^//@\s*check-stderr:\s*(.*)").unwrap();
         let exit_re = regex::Regex::new(r"^//@\s*exit-code:\s*(\d+)").unwrap();
@@ -389,7 +394,9 @@ impl TestCase {
         let directive_re = regex::Regex::new(r"^//@\s*([^:]+)").unwrap();
 
         for (line_num, line) in source.lines().enumerate() {
-            if let Some(cap) = stdout_re.captures(line) {
+            if let Some(_cap) = run_pass.captures(line) {
+                directives.push(TestDirective::RunPass);
+            } else if let Some(cap) = stdout_re.captures(line) {
                 let content = cap[1].trim().to_string();
                 directives.push(TestDirective::CheckStdout(content));
             } else if let Some(cap) = stderr_re.captures(line) {
@@ -471,6 +478,9 @@ impl FileChecker {
 /// Test directives that can appear in source files
 #[derive(Debug)]
 enum TestDirective {
+    /// Compile and run a testcase,
+    /// expect a success (exit with 0)
+    RunPass,
     /// Expected stdout content
     CheckStdout(String),
     /// Expected stderr content
