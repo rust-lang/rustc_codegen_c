@@ -157,6 +157,7 @@ impl TestCommand {
                         TestCase::new(name, source, output_file, TestType::CompileLib, verbose);
                     auxiliaries.push(testcase);
                 }
+
             }
         }
 
@@ -272,6 +273,7 @@ impl TestCommand {
         }
 
         self.log_action_context("result", "all checks passed");
+
     }
 }
 
