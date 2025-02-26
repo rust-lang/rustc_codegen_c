@@ -1,6 +1,8 @@
 //! Test that the generated code has the right number of parameters
 
 //@ aux-build:mini_core.rs
+//@ run-pass
+//@ exit-code: 0
 
 #![feature(no_core)]
 #![no_core]
@@ -24,6 +26,3 @@ pub fn foo(_x: i32, _y: i32, _z: i32) -> i32 {
 pub fn main() -> i32 {
     0
 }
-
-//@ run-pass
-//@ exit-code: 0

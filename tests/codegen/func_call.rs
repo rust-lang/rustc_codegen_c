@@ -1,6 +1,8 @@
 //! Test that the generated code correctly handles function calls
 
 //@ aux-build:mini_core.rs
+//@ run-pass
+//@ exit-code: 1
 
 // CHECK-LABEL: single
 // CHECK: (int32_t {{[[:alnum:]_]*}})
@@ -23,6 +25,3 @@ pub fn single(a: i32) -> i32 {
 pub fn main() -> i32 {
     single(1)
 }
-
-//@ run-pass
-//@ exit-code: 1

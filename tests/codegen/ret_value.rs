@@ -1,6 +1,8 @@
 //! Test that we can return a value from a function
 
 //@ aux-build:mini_core.rs
+//@ run-pass
+//@ exit-code: 42
 
 #![feature(no_core)]
 #![no_core]
@@ -14,6 +16,3 @@ extern crate mini_core;
 pub fn main() -> i32 {
     42
 }
-
-//@ run-pass
-//@ exit-code: 42
