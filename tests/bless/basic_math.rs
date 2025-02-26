@@ -1,4 +1,6 @@
 //@ aux-build:mini_core.rs
+//@ run-pass
+//@ exit-code: 0
 
 #![feature(no_core)]
 #![no_core]

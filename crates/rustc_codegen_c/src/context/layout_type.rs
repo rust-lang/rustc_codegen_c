@@ -1,4 +1,5 @@
 use rustc_abi::Abi;
+use rustc_codegen_c_ast::ty::CTy;
 use rustc_codegen_ssa::traits::LayoutTypeMethods;
 use rustc_middle::ty::layout::TyAndLayout;
 use rustc_middle::ty::Ty;
@@ -17,7 +18,7 @@ impl<'tcx, 'mx> LayoutTypeMethods<'tcx> for CodegenCx<'tcx, 'mx> {
     }
 
     fn fn_decl_backend_type(&self, fn_abi: &FnAbi<'tcx, Ty<'tcx>>) -> Self::Type {
-        todo!()
+        CTy::Void
     }
 
     fn fn_ptr_backend_type(&self, fn_abi: &FnAbi<'tcx, Ty<'tcx>>) -> Self::Type {

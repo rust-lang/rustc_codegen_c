@@ -1,6 +1,8 @@
 //! Test that the generated code has the filename and function name in it
 
 //@ aux-build:mini_core.rs
+//@ run-pass
+//@ exit-code: 0
 
 // CHECK: filename
 
