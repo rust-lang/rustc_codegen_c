@@ -24,3 +24,6 @@ pub fn foo(_x: i32, _y: i32, _z: i32) -> i32 {
 pub fn main() -> i32 {
     0
 }
+
+//@ run-pass
+//@ exit-code: 0

@@ -14,3 +14,6 @@ extern crate mini_core;
 pub fn main() -> i32 {
     42
 }
+
+//@ run-pass
+//@ exit-code: 42

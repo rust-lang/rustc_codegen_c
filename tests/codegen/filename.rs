@@ -20,3 +20,6 @@ pub fn function_name() -> i32 {
 pub fn main() -> i32 {
     0
 }
+
+//@ run-pass
+//@ exit-code: 0
